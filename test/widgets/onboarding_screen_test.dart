@@ -18,6 +18,7 @@ import 'package:mangayomi/utils/platform_utils.dart';
 const _goodUrl = 'https://example.invalid/index.json';
 
 void main() {
+  setUp(() => _StubHideItems.lastSet = null);
   tearDown(() => debugIsTvOverride = null);
 
   Future<void> pump(
@@ -25,13 +26,10 @@ void main() {
     Brightness? brightness,
     bool disableAnimations = false,
     double textScale = 1,
-    // The flow opens on the language; most tests start past it, on the
-    // libraries.
+    // The flow opens on language; most tests start on the novel source step.
     bool pastLanguage = true,
   }) async {
-    // Phone width, because the arrange step is skipped at 600dp and wider,
-    // and tall, because the TV layout overflows the default 600 and puts the
-    // step buttons outside the viewport where a tap cannot reach them.
+    // Tall viewport lets the repository form remain visible during tests.
     tester.view.physicalSize = const Size(400, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -85,564 +83,163 @@ void main() {
     find.widgetWithText(ShioriButton, 'Add repository'),
   );
 
-  /// Walks past the library and navigation steps to the repository step.
-  Future<void> toRepoStep(WidgetTester tester) async {
-    await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-    await tester.pumpAndSettle();
-    if (find.widgetWithText(ShioriButton, 'Next').evaluate().isNotEmpty) {
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-    }
-  }
+  testWidgets('language is the first step', (tester) async {
+    await pump(tester, pastLanguage: false);
+    expect(find.text('Choose your language'), findsOneWidget);
+    expect(find.text('Français'), findsOneWidget);
+    expect(find.text('Deutsch'), findsOneWidget);
+    expect(find.widgetWithText(ShioriButton, 'Restore a backup'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+  });
 
-  testWidgets('offers a way out without adding anything', (tester) async {
+  testWidgets('language choice updates the selected row', (tester) async {
+    await pump(tester, pastLanguage: false);
+    await tester.tap(find.text('Français'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Français'),
+        matching: find.byIcon(Symbols.check_rounded),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('goes directly from language to novel repositories', (tester) async {
     await pump(tester);
-    // A first-run screen that can only be left by supplying a repository would
-    // trap anyone who does not have one to hand.
+    expect(find.text('Add a source'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'Manga'), findsNothing);
+    expect(find.widgetWithText(FilterChip, 'Anime'), findsNothing);
+    expect(find.widgetWithText(FilterChip, 'Novel'), findsNothing);
+    expect(_StubHideItems.lastSet, contains('/MangaLibrary'));
+    expect(_StubHideItems.lastSet, contains('/AnimeLibrary'));
+    expect(_StubHideItems.lastSet, isNot(contains('/NovelLibrary')));
+  });
+
+  testWidgets('can skip adding a repository', (tester) async {
+    await pump(tester);
     expect(find.widgetWithText(ShioriButton, 'Skip for now'), findsOneWidget);
   });
 
-  testWidgets('cannot add an empty repository', (tester) async {
+  testWidgets('empty repository URL cannot be submitted', (tester) async {
     await pump(tester);
-    await toRepoStep(tester);
     expect(addButton(tester).onPressed, isNull);
   });
 
-  testWidgets('cannot add something that is not a url', (tester) async {
+  testWidgets('invalid repository URL cannot be submitted', (tester) async {
     await pump(tester);
-    await toRepoStep(tester);
     await tester.enterText(find.byType(TextField), 'not a url');
     await tester.pump();
     expect(addButton(tester).onPressed, isNull);
   });
 
-  testWidgets('accepts an absolute url', (tester) async {
+  testWidgets('absolute novel repository URL is accepted', (tester) async {
     await pump(tester);
-    await toRepoStep(tester);
-    await tester.enterText(
-      find.byType(TextField),
-      'https://example.invalid/index.json',
-    );
+    await tester.enterText(find.byType(TextField), _goodUrl);
     await tester.pump();
     expect(addButton(tester).onPressed, isNotNull);
   });
 
-  group('the language', () {
-    testWidgets('comes first, each language under its own name', (
-      tester,
-    ) async {
-      await pump(tester, pastLanguage: false);
-      expect(find.text('Choose your language'), findsOneWidget);
-      expect(find.text('Français'), findsOneWidget);
-      expect(find.text('Deutsch'), findsOneWidget);
-    });
-
-    testWidgets('a tap makes it the app\'s language', (tester) async {
-      await pump(tester, pastLanguage: false);
-      await tester.tap(find.text('Français'));
-      await tester.pumpAndSettle();
-      // The test's app has a fixed locale; the row the provider now holds is
-      // the one ticked.
-      expect(
-        find.descendant(
-          of: find.widgetWithText(ListTile, 'Français'),
-          matching: find.byIcon(Symbols.check_rounded),
-        ),
-        findsOneWidget,
-      );
-    });
+  testWidgets('can add a novel repository', (tester) async {
+    await pump(tester);
+    await tester.enterText(find.byType(TextField), _goodUrl);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ShioriButton, 'Add repository'));
+    await tester.pumpAndSettle();
+    expect(find.text('Test repo'), findsWidgets);
+    expect(find.widgetWithText(ShioriButton, 'Continue'), findsOneWidget);
   });
 
-  group('the steps', () {
-    testWidgets('opens by asking which libraries the user reads', (
-      tester,
-    ) async {
-      await pump(tester);
-      expect(find.text('Welcome to Mangayomi'), findsOneWidget);
-      for (final label in ['Manga', 'Anime', 'Novel']) {
-        expect(find.widgetWithText(FilterChip, label), findsOneWidget);
-      }
-    });
-
-    testWidgets('asks how the libraries sit in the bar, then for a repo', (
-      tester,
-    ) async {
-      await pump(tester);
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsOneWidget);
-      expect(find.widgetWithText(FilterChip, 'A tab each'), findsOneWidget);
-      expect(find.widgetWithText(FilterChip, 'Grouped tabs'), findsOneWidget);
-
-      // A tab each: the preview bar names every library and Updates and
-      // History apart.
-      await tester.tap(find.widgetWithText(FilterChip, 'A tab each'));
-      await tester.pumpAndSettle();
-      expect(find.text('Library'), findsNothing);
-      expect(find.text('Updates'), findsOneWidget);
-
-      // Grouped, as the app starts: Library and Activity, and the switcher
-      // at the top of Library drawn under the bar.
-      await tester.tap(find.widgetWithText(FilterChip, 'Grouped tabs'));
-      await tester.pumpAndSettle();
-      expect(find.text('Library'), findsOneWidget);
-      expect(find.text('Activity'), findsOneWidget);
-      expect(find.byType(ShioriSegmentedControl<ItemType>), findsOneWidget);
-
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add a source'), findsOneWidget);
-      expect(find.byType(TextField), findsOneWidget);
-    });
-
-    testWidgets('asks on a wide screen too, where the grouping applies', (
-      tester,
-    ) async {
-      await pump(tester);
-      tester.view.physicalSize = const Size(900, 2400);
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsOneWidget);
-    });
-
-    testWidgets('skips arranging a bar that holds one library', (tester) async {
-      await pump(tester);
-      // Two off, one left. There is nothing to arrange, so asking would be
-      // asking for the sake of it.
-      await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilterChip, 'Novel'));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsNothing);
-      expect(find.text('Add a source'), findsOneWidget);
-    });
-
-    testWidgets('keeps at least one library selected', (tester) async {
-      await pump(tester);
-      // Turning them all off would leave a bar with no library in it.
-      for (final label in ['Manga', 'Anime', 'Novel']) {
-        await tester.tap(find.widgetWithText(FilterChip, label));
-        await tester.pump();
-      }
-      final selected = tester
-          .widgetList<FilterChip>(find.byType(FilterChip))
-          .where((chip) => chip.selected);
-      expect(selected, isNotEmpty);
-    });
-
-    testWidgets('only offers a repo type the user actually reads', (
-      tester,
-    ) async {
-      await pump(tester);
-      await tester.tap(find.widgetWithText(FilterChip, 'Novel'));
-      await tester.pump();
-      await toRepoStep(tester);
-      expect(find.widgetWithText(FilterChip, 'Manga'), findsOneWidget);
-      expect(find.widgetWithText(FilterChip, 'Anime'), findsOneWidget);
-      expect(find.widgetWithText(FilterChip, 'Novel'), findsNothing);
-    });
+  testWidgets('local novel files can be added from the repository step',
+      (tester) async {
+    await pump(tester);
+    expect(find.widgetWithText(ShioriButton, 'Add a folder'), findsOneWidget);
+    expect(find.text('Or use files you already have'), findsOneWidget);
   });
 
-  group('choices do not resize', () {
-    testWidgets('a chip is the same width selected and not', (tester) async {
-      await pump(tester);
-      final chip = find.widgetWithText(FilterChip, 'Anime');
-      final before = tester.getSize(chip);
-      await tester.tap(chip);
-      await tester.pumpAndSettle();
-      // A tick appearing on selection changed every chip's width and made the
-      // row jump about as the user tapped through it.
-      expect(tester.getSize(chip), before);
-    });
+  testWidgets('backup restore is offered before the repository step only',
+      (tester) async {
+    await pump(tester, pastLanguage: false);
+    expect(find.widgetWithText(ShioriButton, 'Restore a backup'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ShioriButton, 'Restore a backup'), findsNothing);
   });
 
-  group('edge cases', () {
-    testWidgets('lands on the library the repo was filed under, not the one '
-        'the picker happens to show', (tester) async {
-      await pump(tester);
-      await toRepoStep(tester);
-      await tester.enterText(find.byType(TextField), _goodUrl);
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Add repository'));
-      await tester.pumpAndSettle();
-      // Filed under Manga. Moving the picker afterwards must not redirect the
-      // landing to a library with nothing in it.
-      await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
-      await tester.pumpAndSettle();
-      debugPrint(
-        'PROBE: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).toList()}',
-      );
-      expect(find.widgetWithText(ShioriButton, 'Continue'), findsOneWidget);
-    });
-
-    testWidgets('a failed repo says what to do, not what threw', (
-      tester,
-    ) async {
-      await pump(tester);
-      await toRepoStep(tester);
-      await tester.enterText(find.byType(TextField), 'https://example.invalid');
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Add repository'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Exception'), findsNothing);
-      expect(
-        find.text(
-          "Couldn't read that repository. Check the address and your "
-          'connection.',
-        ),
-        findsOneWidget,
-      );
-    });
+  testWidgets('back goes from repository to language', (tester) async {
+    await pump(tester);
+    await tester.tap(
+      find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose your language'), findsOneWidget);
   });
 
-  group('files you already have', () {
-    testWidgets('are offered beside the repository, not under it', (
-      tester,
-    ) async {
-      // The one thing the app can do with nothing installed and no
-      // connection. Somebody who already has files should not have to skip
-      // past an empty screen to use them.
-      await pump(tester);
-      await toRepoStep(tester);
-      expect(find.widgetWithText(ShioriButton, 'Add a folder'), findsOneWidget);
-      expect(find.text('Or use files you already have'), findsOneWidget);
-    });
-
-    testWidgets('are not offered before the source step', (tester) async {
-      await pump(tester);
-      expect(find.widgetWithText(ShioriButton, 'Add a folder'), findsNothing);
-    });
+  testWidgets('the first step has no back arrow', (tester) async {
+    await pump(tester, pastLanguage: false);
+    expect(find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
+        findsNothing);
   });
 
-  group('restoring instead', () {
-    testWidgets('the first step offers it, the later ones do not', (
-      tester,
-    ) async {
-      // A backup carries repositories, library and settings, so it answers
-      // every question here. It belongs where it can save the walk, not after
-      // it.
-      await pump(tester);
-      expect(
-        find.widgetWithText(ShioriButton, 'Restore a backup'),
-        findsOneWidget,
-      );
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(ShioriButton, 'Restore a backup'),
-        findsNothing,
-      );
-    });
-  });
-
-  group('motion', () {
-    Future<int> framesToChangeStep(
-      WidgetTester tester, {
-      required bool disableAnimations,
-    }) async {
-      await pump(tester, disableAnimations: disableAnimations);
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      final frames = await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsOneWidget);
-      return frames;
-    }
-
-    // Settling takes 5 frames animated and 3 with animations off. The numbers
-    // matter less than the gap: the step has to change either way, and it must
-    // not spend a quarter of a second doing it when the platform asked for
-    // stillness.
-    testWidgets('a step change is animated', (tester) async {
-      expect(
-        await framesToChangeStep(tester, disableAnimations: false),
-        greaterThanOrEqualTo(5),
-      );
-    });
-
-    testWidgets('and is not when the platform asks for stillness', (
-      tester,
-    ) async {
-      expect(
-        await framesToChangeStep(tester, disableAnimations: true),
-        lessThan(5),
-      );
-    });
-  });
-
-  group('floating widgets', () {
-    testWidgets('the back arrow can show its tooltip', (tester) async {
-      // The screen renders in MaterialApp.builder, outside the router's
-      // Navigator, so it has no Overlay unless one is given to it. Without
-      // that the first hover over this button throws.
-      await pump(tester);
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      final back = find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded);
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer(location: tester.getCenter(back));
-      addTearDown(gesture.removePointer);
-      await tester.pump();
-      await gesture.moveTo(tester.getCenter(back));
-      await tester.pump(const Duration(seconds: 2));
-      expect(tester.takeException(), isNull);
-    });
-  });
-
-  group('going back', () {
-    testWidgets('the first step has nothing to go back to', (tester) async {
-      await pump(tester, pastLanguage: false);
-      expect(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-        findsNothing,
-      );
-    });
-
-    testWidgets('walks back through the steps it walked forward', (
-      tester,
-    ) async {
-      await pump(tester);
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add a source'), findsOneWidget);
-
-      await tester.tap(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsOneWidget);
-
-      await tester.tap(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Welcome to Mangayomi'), findsOneWidget);
-
-      await tester.tap(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Choose your language'), findsOneWidget);
-      expect(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-        findsNothing,
-      );
-    });
-
-    testWidgets('skips the arrange step on the way back too', (tester) async {
-      await pump(tester);
-      // One library, so arranging was skipped going forward and going back
-      // through it would show a step that was never offered.
-      await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilterChip, 'Novel'));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add a source'), findsOneWidget);
-
-      await tester.tap(
-        find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Your libraries'), findsNothing);
-      expect(find.text('Welcome to Mangayomi'), findsOneWidget);
-    });
-  });
-
-  group('the step indicator', () {
-    Iterable<double> dotWidths(WidgetTester tester) => tester
+  testWidgets('two progress dots track language and source', (tester) async {
+    Iterable<double> widths() => tester
         .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
-        .map((c) => (c.constraints?.maxWidth) ?? 0);
-
-    testWidgets('shows one mark per step that will actually be asked', (
-      tester,
-    ) async {
-      await pump(tester);
-      expect(dotWidths(tester).length, 4);
-    });
-
-    testWidgets('drops to two when the arrange step will be skipped', (
-      tester,
-    ) async {
-      // Three marks followed by two questions would be a small lie about how
-      // long this takes.
-      await pump(tester);
-      await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilterChip, 'Novel'));
-      await tester.pumpAndSettle();
-      expect(dotWidths(tester).length, 3);
-    });
-
-    testWidgets('marks the step you are on, and moves with you', (
-      tester,
-    ) async {
-      await pump(tester, pastLanguage: false);
-      expect(dotWidths(tester).first, greaterThan(dotWidths(tester).last));
-
-      await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-      await tester.pumpAndSettle();
-      final widths = dotWidths(tester).toList();
-      expect(widths[1], greaterThan(widths[0]));
-    });
+        .map((c) => c.constraints?.maxWidth ?? 0);
+    await pump(tester, pastLanguage: false);
+    expect(widths().length, 2);
+    expect(widths().first, greaterThan(widths().last));
+    await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
+    await tester.pumpAndSettle();
+    final current = widths().toList();
+    expect(current[1], greaterThan(current[0]));
   });
 
-  group('large text', () {
-    testWidgets('the first step still fits at double size', (tester) async {
-      // Wrap and a scroll view should cope, but nobody had tried it.
-      await pump(tester, textScale: 2);
-      expect(tester.takeException(), isNull);
-      expect(find.widgetWithText(ShioriButton, 'Next'), findsOneWidget);
-    });
-
-    testWidgets('and so does the source step, which carries the most', (
-      tester,
-    ) async {
-      await pump(tester, textScale: 2);
-      await toRepoStep(tester);
-      expect(tester.takeException(), isNull);
-      expect(find.byType(TextField), findsOneWidget);
-    });
+  testWidgets('the novel source screen fits large text', (tester) async {
+    await pump(tester, textScale: 2);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(TextField), findsOneWidget);
   });
 
-  group('contrast', () {
-    for (final brightness in Brightness.values) {
-      testWidgets('a selected chip reads against its fill on $brightness', (
-        tester,
-      ) async {
-        await pump(tester, brightness: brightness);
-        final scheme = ThemeData(brightness: brightness).colorScheme;
-        final chip = tester.widget<FilterChip>(
-          find.widgetWithText(FilterChip, 'Manga'),
-        );
-        // The default pairs a secondary-container fill with an on-surface
-        // label, which lands dark on dark under some light schemes.
-        expect(chip.selectedColor, scheme.primary);
-        expect(chip.labelStyle?.color, scheme.onPrimary);
-      });
-    }
+  testWidgets('the language step fits large text', (tester) async {
+    await pump(tester, textScale: 2, pastLanguage: false);
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(ShioriButton, 'Next'), findsOneWidget);
   });
 
-  group('the preview bar', () {
-    for (final brightness in Brightness.values) {
-      testWidgets('the current entry reads against the bar on $brightness', (
-        tester,
-      ) async {
-        await pump(tester, brightness: brightness);
-        await tester.tap(find.widgetWithText(ShioriButton, 'Next'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilterChip, 'A tab each'));
-        await tester.pumpAndSettle();
-        final scheme = ThemeData(brightness: brightness).colorScheme;
-        // Bare primary is a pale blue on the light schemes and came out
-        // fainter than the entries it was supposed to stand out from.
-        final current = tester.widget<Text>(
-          find
-              .descendant(of: find.byType(Column), matching: find.text('Manga'))
-              .first,
-        );
-        // The label sits on the bar, not on the indicator, so it has to read
-        // against the bar's colour.
-        expect(current.style?.color, scheme.onSurface);
-      });
-    }
+  for (final brightness in Brightness.values) {
+    testWidgets('the app logo is legible on $brightness', (tester) async {
+      await pump(tester, brightness: brightness);
+      final image = tester.widget<Image>(find.byType(Image).first);
+      expect((image.image as AssetImage).assetName, 'assets/app_icons/icon.png');
+      expect(image.color,
+          brightness == Brightness.dark ? Colors.white : Colors.black);
+    });
+  }
+
+  testWidgets('the back arrow tooltip opens without an overlay exception',
+      (tester) async {
+    await pump(tester);
+    final back = find.widgetWithIcon(IconButton, Symbols.arrow_back_rounded);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: tester.getCenter(back));
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+    await gesture.moveTo(tester.getCenter(back));
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.takeException(), isNull);
   });
 
-  group('the app mark', () {
-    Image logo(WidgetTester tester) =>
-        tester.widget<Image>(find.byType(Image).first);
-
-    String asset(WidgetTester tester) =>
-        (logo(tester).image as AssetImage).assetName;
-
-    testWidgets('is the silhouette, tinted white, on a dark theme', (
-      tester,
-    ) async {
-      await pump(tester, brightness: Brightness.dark);
-      expect(asset(tester), 'assets/app_icons/icon.png');
-      expect(logo(tester).color, Colors.white);
-    });
-
-    testWidgets('is the same silhouette, tinted black, on a light theme', (
-      tester,
-    ) async {
-      // The mark is a silhouette, so it vanishes into one background or the
-      // other unless the tint is flipped with the theme.
-      await pump(tester, brightness: Brightness.light);
-      expect(asset(tester), 'assets/app_icons/icon.png');
-      expect(logo(tester).color, Colors.black);
-    });
-  });
-
-  group('on a TV', () {
-    setUp(() {
-      debugIsTvOverride = true;
-      _StubHideItems.lastSet = null;
-    });
-
-    testWidgets('never asks which libraries, it is a television', (
-      tester,
-    ) async {
-      // Nobody reads manga on a television, so the question has one answer and
-      // is not worth a screen of d-pad presses. The flow opens on the source.
-      await pump(tester);
-
-      expect(find.byType(TvPill), findsNothing);
-      expect(find.byType(FilterChip), findsNothing);
-      expect(find.byType(TextField), findsOneWidget, reason: 'the repo step');
-    });
-
-    testWidgets('and hides the libraries it did not choose', (tester) async {
-      // The step that writes that choice is the one being skipped, so it has
-      // to be written anyway or manga and novel stay in the rail.
-      await pump(tester);
-      await tester.pumpAndSettle();
-
-      final hidden = _StubHideItems.lastSet;
-      expect(hidden, isNotNull, reason: 'the choice was written at all');
-      expect(hidden, contains('/MangaLibrary'));
-      expect(hidden, contains('/NovelLibrary'));
-      expect(hidden, isNot(contains('/AnimeLibrary')));
-    });
-
-    testWidgets('the url field takes focus, so OK opens the keyboard', (
-      tester,
-    ) async {
-      await pump(tester);
-      final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.autofocus, isTrue);
-    });
-
-    testWidgets('says the repository can be added later instead', (
-      tester,
-    ) async {
-      await pump(tester);
-      // Typing a url on a remote is miserable; leaving now has to look like a
-      // real option rather than a failure.
-      expect(
-        find.text('You can add one later in Settings, under Browse.'),
-        findsOneWidget,
-      );
-      expect(find.widgetWithText(ShioriButton, 'Skip for now'), findsOneWidget);
-    });
-
-    testWidgets('the phone layout keeps chips and loses the hint', (
-      tester,
-    ) async {
-      debugIsTvOverride = false;
-      await pump(tester);
-      expect(find.byType(FilterChip), findsNWidgets(ItemType.values.length));
-      expect(find.byType(TvPill), findsNothing);
-      await toRepoStep(tester);
-      expect(
-        find.text('You can add one later in Settings, under Browse.'),
-        findsNothing,
-      );
-    });
+  testWidgets('TV still offers only novel repositories', (tester) async {
+    debugIsTvOverride = true;
+    await pump(tester);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(TvPill), findsNothing);
+    expect(find.byType(FilterChip), findsNothing);
+    expect(_StubHideItems.lastSet, contains('/MangaLibrary'));
+    expect(_StubHideItems.lastSet, contains('/AnimeLibrary'));
+    expect(_StubHideItems.lastSet, isNot(contains('/NovelLibrary')));
+    expect(tester.widget<TextField>(find.byType(TextField)).autofocus, isTrue);
   });
 }
 

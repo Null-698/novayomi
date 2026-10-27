@@ -97,9 +97,8 @@ void main() {
     expect(find.byType(SourcesScreen), findsNothing);
   });
 
-  testWidgets('updates media segments live when types are hidden in settings', (
-    tester,
-  ) async {
+  testWidgets('novel sources stay available when legacy media are hidden',
+      (tester) async {
     tester.view.physicalSize = const Size(400, 860);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -128,49 +127,23 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(BrowseScreen)),
     );
+    // Novel-only Browse does not need a three-media switcher.
+    expect(find.byType(ShioriSegmentedControl<ItemType>), findsNothing);
+    expect(find.byType(SourcesScreen), findsOneWidget);
 
-    var segmented = tester.widget<ShioriSegmentedControl<ItemType>>(
-      find.byType(ShioriSegmentedControl<ItemType>),
-    );
-    expect(segmented.segments.map((s) => s.value).toList(), [
-      ItemType.manga,
-      ItemType.anime,
-      ItemType.novel,
-    ]);
-
-    // Disable Manga while BrowseScreen stays mounted.
-    container.read(hideItemsStateProvider.notifier).set(['/MangaLibrary']);
-    await settle(tester);
-
-    segmented = tester.widget<ShioriSegmentedControl<ItemType>>(
-      find.byType(ShioriSegmentedControl<ItemType>),
-    );
-    expect(segmented.segments.map((s) => s.value).toList(), [
-      ItemType.anime,
-      ItemType.novel,
-    ]);
-    expect(segmented.selected, ItemType.anime);
-
-    // Disable Novel as well -> only Anime remains, media switch hides.
+    // Existing saved hide settings for manga/anime cannot hide novel sources.
     container.read(hideItemsStateProvider.notifier).set([
       '/MangaLibrary',
+      '/AnimeLibrary',
       '/NovelLibrary',
     ]);
     await settle(tester);
-
+    expect(find.byType(SourcesScreen), findsOneWidget);
     expect(find.byType(ShioriSegmentedControl<ItemType>), findsNothing);
 
-    // Re-enable all types -> media switch returns with all 3 types.
-    container.read(hideItemsStateProvider.notifier).set([]);
+    await tester.fling(find.byType(SourcesScreen), const Offset(-300, 0), 1000);
     await settle(tester);
-
-    segmented = tester.widget<ShioriSegmentedControl<ItemType>>(
-      find.byType(ShioriSegmentedControl<ItemType>),
-    );
-    expect(segmented.segments.map((s) => s.value).toList(), [
-      ItemType.manga,
-      ItemType.anime,
-      ItemType.novel,
-    ]);
+    expect(find.byType(ExtensionScreen), findsOneWidget);
   });
+
 }

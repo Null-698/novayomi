@@ -58,10 +58,10 @@ void main() {
     tester,
   ) async {
     await pump(tester);
-    // Past the language, onto the libraries.
+    // Past the language, onto novel sources.
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome to Mangayomi'), findsOneWidget);
+    expect(find.text('Add a source'), findsOneWidget);
 
     await systemBack(tester);
     expect(find.text('Choose your language'), findsOneWidget);
