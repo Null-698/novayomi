@@ -22,9 +22,7 @@ class OnboardingCompletedState extends _$OnboardingCompletedState {
     final completed = settings.onboardingCompleted;
     if (completed != null) return completed;
     if (kDebugMode) return true;
-    return (settings.mangaExtensionsRepo?.isNotEmpty ?? false) ||
-        (settings.animeExtensionsRepo?.isNotEmpty ?? false) ||
-        (settings.novelExtensionsRepo?.isNotEmpty ?? false);
+    return settings.novelExtensionsRepo?.isNotEmpty ?? false;
   }
 
   void complete() => _set(true);

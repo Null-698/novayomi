@@ -266,9 +266,8 @@ class _OnboardingScreenState extends ConsumerState<_OnboardingBody>
 
   /// Whether any library has a repository, asked after a restore that may have
   /// brought some in.
-  bool get _hasAnyRepo => ItemType.values.any(
-    (type) => ref.read(extensionsRepoStateProvider(type)).isNotEmpty,
-  );
+  bool get _hasAnyRepo =>
+      ref.read(extensionsRepoStateProvider(ItemType.novel)).isNotEmpty;
 
   /// Returns to the previous question, skipping the arrange step when it was
   /// skipped on the way in.
@@ -562,6 +561,13 @@ class _OnboardingScreenState extends ConsumerState<_OnboardingBody>
           expand: true,
           onPressed: _next,
           label: l10n.onboarding_next,
+        ),
+        const SizedBox(height: ShioriSpace.s12),
+        ShioriButton.secondary(
+          expand: true,
+          onPressed: _restore,
+          icon: Symbols.settings_backup_restore_rounded,
+          label: l10n.onboarding_restore,
         ),
       ],
     ),
