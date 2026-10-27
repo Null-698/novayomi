@@ -9,9 +9,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
-env:
-  ZSIGN_VERSION: "0.7"
-
 jobs:
   build-and-release-ios-ipa:
     permissions:
@@ -44,27 +41,13 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Setup signing environment
-        env:
-          P12_BASE64: ${{ secrets.P12_CERTIFICATE }}
-          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE }}
-        run: |
-          echo "$P12_BASE64" | base64 -d > certificate.p12
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 -d > profile.mobileprovision
-          curl -L -o zsign.zip "https://github.com/zhlynn/zsign/releases/download/v${{ env.ZSIGN_VERSION }}/zsign-v${{ env.ZSIGN_VERSION }}-macos-x64.zip"
-          unzip zsign.zip
-          chmod +x zsign || chmod +x zsign-*
-
-      - name: Build iOS
-        env:
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      - name: Build unsigned iOS IPA
         run: |
           flutter build ios --release --no-codesign
-          mkdir -p build/ios/iphoneos/Payload
-          mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
-          ./zsign -f -k ./certificate.p12 -p "$P12_PASSWORD" -m ./profile.mobileprovision ./build/ios/iphoneos/Payload/Runner.app
           cd build/ios/iphoneos
-          zip -r Novayomi-${{ github.ref_name }}-ios.ipa Payload
+          mkdir -p Payload
+          cp -R Runner.app Payload/
+          zip -qr Novayomi-${{ github.ref_name }}-ios.ipa Payload
 
       - name: Upload artifact iOS IPA
         uses: actions/upload-artifact@v4
