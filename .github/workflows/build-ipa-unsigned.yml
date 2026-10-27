@@ -1,9 +1,12 @@
 name: Build IPA Unsigned
 
 on:
-  push:
-    tags:
-      - v*
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional existing tag for publishing a GitHub Release'
+        required: false
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -17,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -47,15 +52,16 @@ jobs:
           cd build/ios/iphoneos
           mkdir -p Payload
           cp -R Runner.app Payload/
-          zip -qr Novayomi-${{ github.ref_name }}-ios.ipa Payload
+          zip -qr Novayomi-${{ inputs.release_tag || github.ref_name }}-ios.ipa Payload
 
       - name: Upload artifact iOS IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Novayomi-${{ github.ref_name }}-ios
+          name: Novayomi-${{ inputs.release_tag || github.ref_name }}-ios
           path: "build/ios/iphoneos/Novayomi-*.ipa"
 
   publish-release:
+    if: ${{ inputs.release_tag != '' }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -79,3 +85,4 @@ jobs:
           artifacts: "release-assets/*"
           generateReleaseNotes: true
           allowUpdates: true
+          tag: ${{ inputs.release_tag }}
