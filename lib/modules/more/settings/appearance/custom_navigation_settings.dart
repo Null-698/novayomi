@@ -23,6 +23,9 @@ class _CustomNavigationSettingsState
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final navigationOrder = ref.watch(navigationOrderStateProvider);
+    final editableOrder = navigationOrder
+        .where((route) => route != '/MangaLibrary' && route != '/AnimeLibrary')
+        .toList();
     final hideItems = ref.watch(hideItemsStateProvider);
     final mergeLibraryNavMobile = ref.watch(mergeLibraryNavMobileStateProvider);
     return Scaffold(
@@ -59,12 +62,14 @@ class _CustomNavigationSettingsState
             ],
           ),
           buildDefaultDragHandles: false,
-          itemCount: navigationOrder.length,
+          itemCount: editableOrder.length,
           itemBuilder: (context, index) {
-            final navigation = navigationOrder[index];
+            final navigation = editableOrder[index];
             // More and Browse hold the settings and the sources: always
             // shown, so there is always a way back to this screen.
-            final fixed = navigation == "/more" || navigation == "/browse";
+            final fixed = navigation == "/more" ||
+                navigation == "/browse" ||
+                navigation == "/NovelLibrary";
             return Row(
               key: Key('navigation_$navigation'),
               children: [
@@ -94,7 +99,7 @@ class _CustomNavigationSettingsState
             );
           },
           onReorderItem: (oldIndex, newIndex) {
-            final reordered = navigationOrder.toList();
+            final reordered = editableOrder.toList();
             if (oldIndex < newIndex) {
               final draggedItem = reordered[oldIndex];
               for (var i = oldIndex; i < newIndex - 1; i++) {
@@ -108,7 +113,10 @@ class _CustomNavigationSettingsState
               }
               reordered[newIndex] = draggedItem;
             }
-            ref.read(navigationOrderStateProvider.notifier).set(reordered);
+            ref.read(navigationOrderStateProvider.notifier).set([
+              ...reordered,
+              ...navigationOrder.where((route) => !editableOrder.contains(route)),
+            ]);
           },
         ),
       ),

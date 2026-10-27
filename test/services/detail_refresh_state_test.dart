@@ -27,7 +27,6 @@ import 'package:mangayomi/modules/manga/download/providers/download_provider.dar
 import 'package:mangayomi/modules/manga/download/providers/download_gate.dart';
 import 'package:mangayomi/modules/manga/reader/providers/reader_controller_provider.dart';
 import 'package:mangayomi/modules/novel/novel_reader_controller_provider.dart';
-import 'package:mangayomi/modules/anime/providers/anime_player_controller_provider.dart';
 import 'package:mangayomi/modules/reader_common/mixins/chapter_controller_mixin.dart';
 import 'package:mangayomi/services/chapter_cache.dart';
 import 'package:mangayomi/services/get_chapter_pages.dart';
@@ -883,7 +882,7 @@ void main() {
     },
   );
 
-  for (final kind in ['manga', 'novel', 'anime']) {
+  for (final kind in ['manga', 'novel']) {
     test(
       '$kind opening a stale chapter follows the survivor for history',
       () async {
@@ -925,9 +924,6 @@ void main() {
         final ChapterControllerMixin controller = switch (kind) {
           'novel' => container.read(
             novelReaderControllerProvider(chapter: stale).notifier,
-          ),
-          'anime' => container.read(
-            animeStreamControllerProvider(episode: stale).notifier,
           ),
           _ => container.read(
             readerControllerProvider(chapter: stale).notifier,

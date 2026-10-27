@@ -22,7 +22,7 @@ Future<void> pushMangaReaderView({
         await context.push('/mangaReaderView', extra: chapter.id!);
         break;
       case ItemType.anime:
-        await context.push('/animePlayerView', extra: chapter.id!);
+        botToast('Novayomi supports novels only.');
         break;
       case ItemType.novel:
         await context.push('/novelReaderView', extra: chapter.id!);
@@ -55,7 +55,6 @@ void pushReplacementMangaReaderView({
       context.pushReplacement('/mangaReaderView', extra: chapter.id!);
       break;
     case ItemType.anime:
-      context.pushReplacement('/animePlayerView', extra: chapter.id!);
       break;
     case ItemType.novel:
       context.pushReplacement('/novelReaderView', extra: chapter.id!);

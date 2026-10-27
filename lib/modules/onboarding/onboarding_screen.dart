@@ -103,15 +103,13 @@ class _OnboardingScreenState extends ConsumerState<_OnboardingBody>
   /// A television only ever reads anime, so the question is not asked there
   /// and this is the answer. Everywhere else it starts with everything ticked
   /// and the reader narrows it.
-  final Set<ItemType> _libraries = isTv
-      ? {ItemType.anime}
-      : {...ItemType.values};
+  final Set<ItemType> _libraries = {ItemType.novel};
 
   /// Whether the navigation groups the libraries behind one Library tab, and
   /// Updates and History behind one Activity tab. Starts on the app's own
   /// setting, which is on for a new install.
   late bool _mergeLibraries = ref.read(navGroupingProvider);
-  ItemType _repoType = ItemType.manga;
+  ItemType _repoType = ItemType.novel;
 
   bool _adding = false;
   String? _error;
@@ -194,8 +192,6 @@ class _OnboardingScreenState extends ConsumerState<_OnboardingBody>
   /// window, so the flow is two steps long as often as three.
   List<_Step> get _visibleSteps => [
     _Step.language,
-    if (!isTv) _Step.libraries,
-    if (_shouldArrangeBar) _Step.navigation,
     _Step.repository,
   ];
 
@@ -211,9 +207,10 @@ class _OnboardingScreenState extends ConsumerState<_OnboardingBody>
 
   void _next() {
     if (_step == _Step.language) {
+      _applyLibraries();
       setState(() {
         _forward = true;
-        _step = isTv ? _Step.repository : _Step.libraries;
+        _step = _Step.repository;
       });
       return;
     }

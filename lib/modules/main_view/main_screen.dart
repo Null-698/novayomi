@@ -64,7 +64,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
         ? _navigationOrder.where(isNotHiddenLibOnTv).toList()
         : _navigationOrder;
     final visible = order.where((e) => !hiddenItems.contains(e)).toList();
-    _defaultLocation = visible.isNotEmpty ? visible.first : "/AnimeLibrary";
+    _defaultLocation = visible.isNotEmpty ? visible.first : "/NovelLibrary";
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {

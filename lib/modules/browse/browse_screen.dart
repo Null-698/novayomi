@@ -74,20 +74,11 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
   // layout so only anime shows, and respect media types hidden in Settings.
   // Recomputed live so toggling "Anime only" or hiding a media type updates
   // the tabs without a restart. Defaults to isTv, user-overridable. See #729.
-  List<BrowseTab> _computeTabList(bool animeOnly, List<String> hideItems) => [
-    if (!animeOnly && !hideItems.contains("/MangaLibrary"))
-      const BrowseTab(ItemType.manga, BrowseTabKind.sources),
-    if (!hideItems.contains("/AnimeLibrary"))
-      const BrowseTab(ItemType.anime, BrowseTabKind.sources),
-    if (!animeOnly && !hideItems.contains("/NovelLibrary"))
-      const BrowseTab(ItemType.novel, BrowseTabKind.sources),
-    if (!animeOnly && !hideItems.contains("/MangaLibrary"))
-      const BrowseTab(ItemType.manga, BrowseTabKind.extensions),
-    if (!hideItems.contains("/AnimeLibrary"))
-      const BrowseTab(ItemType.anime, BrowseTabKind.extensions),
-    if (!animeOnly && !hideItems.contains("/NovelLibrary"))
-      const BrowseTab(ItemType.novel, BrowseTabKind.extensions),
-  ];
+  List<BrowseTab> _computeTabList(bool animeOnly, List<String> hideItems) =>
+      const [
+        BrowseTab(ItemType.novel, BrowseTabKind.sources),
+        BrowseTab(ItemType.novel, BrowseTabKind.extensions),
+      ];
 
   @override
   void initState() {

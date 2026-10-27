@@ -14,7 +14,6 @@ import 'package:mangayomi/models/track.dart';
 import 'package:mangayomi/models/track_preference.dart';
 import 'package:mangayomi/models/track_search.dart';
 import 'package:mangayomi/services/discovery/media_lookup_context.dart';
-import 'package:mangayomi/modules/anime/anime_player_view.dart';
 import 'package:mangayomi/modules/browse/extension/edit_code.dart';
 import 'package:mangayomi/modules/browse/extension/extension_detail.dart';
 import 'package:mangayomi/modules/browse/extension/widgets/create_extension.dart';
@@ -232,11 +231,6 @@ class RouterNotifier extends ChangeNotifier {
       // remounts instead of reusing the Element and going stale.
       builder: (id) =>
           MangaReaderView(key: ValueKey('mangaReader-$id'), chapterId: id),
-    ),
-    _genericRoute<int>(
-      name: "animePlayerView",
-      builder: (id) =>
-          AnimePlayerView(key: ValueKey('animePlayer-$id'), episodeId: id),
     ),
     _genericRoute<int>(
       name: "novelReaderView",

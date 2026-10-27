@@ -184,9 +184,9 @@ class FullScreenReaderState extends _$FullScreenReaderState {
 @riverpod
 class NavigationOrderState extends _$NavigationOrderState {
   final items = [
+    '/NovelLibrary',
     '/MangaLibrary',
     '/AnimeLibrary',
-    '/NovelLibrary',
     '/updates',
     '/history',
     '/browse',
@@ -196,9 +196,11 @@ class NavigationOrderState extends _$NavigationOrderState {
 
   @override
   List<String> build() {
-    return _checkMissingItems(
+    final saved = _checkMissingItems(
       settingsRepository.current.navigationOrder?.toList() ?? [],
     );
+    // Always open on novels, including when upgrading an existing installation.
+    return ['/NovelLibrary', ...saved.where((e) => e != '/NovelLibrary')];
   }
 
   List<String> _checkMissingItems(List<String> navigationOrder) {
@@ -218,12 +220,19 @@ class NavigationOrderState extends _$NavigationOrderState {
 class HideItemsState extends _$HideItemsState {
   @override
   List<String> build() {
-    return settingsRepository.current.hideItems ?? ['/trackerLibrary'];
+    return _novelOnly(settingsRepository.current.hideItems ?? ['/trackerLibrary']);
   }
 
+  List<String> _novelOnly(List<String> values) => {
+    ...values,
+    '/MangaLibrary',
+    '/AnimeLibrary',
+  }.where((route) => route != '/NovelLibrary').toList();
+
   void set(List<String> values) {
-    state = values;
-    settingsRepository.update((s) => s.hideItems = values);
+    final normalized = _novelOnly(values);
+    state = normalized;
+    settingsRepository.update((s) => s.hideItems = normalized);
   }
 }
 

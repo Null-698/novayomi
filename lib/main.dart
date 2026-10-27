@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:app_links/app_links.dart';
-import 'package:archive/archive.dart';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -62,11 +61,10 @@ import 'package:mangayomi/utils/extensions/chapter_extensions.dart';
 import 'package:mangayomi/services/download_manager/download_gate.dart';
 import 'package:mangayomi/modules/more/settings/security/providers/security_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/security/app_lock_screen.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter/services.dart' show rootBundle, LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:mangayomi/utils/window_geometry.dart';
 import 'package:mangayomi/modules/more/settings/general/providers/memory_probe_provider.dart';
 import 'package:mangayomi/modules/widgets/memory_overlay.dart';
@@ -116,7 +114,6 @@ void main(List<String> args) async {
         return true; // handled — prevent app termination
       };
 
-      MediaKit.ensureInitialized();
       await RustLib.init();
       // Detect Android TV / leanback so the UI can branch on form factor.
       // No-op on other platforms. See #729.
@@ -203,7 +200,7 @@ class _StartupErrorApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Failed to start Mangayomi',
+                  'Failed to start Novayomi',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -299,7 +296,6 @@ class _MyAppState extends ConsumerState<MyApp>
     _initBackgroundWork();
     customDns = ref.read(customDnsStateProvider);
     _initDeepLinks();
-    _setupMpvConfig();
 
     // Tracker refresh and the local-library filesystem scan compete with the
     // first paint for network/CPU; run them shortly after the UI is up.
@@ -576,8 +572,6 @@ class _MyAppState extends ConsumerState<MyApp>
         case "add-repo":
           final repoName = uri.queryParameters["repo_name"];
           final repoUrl = uri.queryParameters["repo_url"];
-          final mangaRepoUrls = uri.queryParametersAll["manga_url"];
-          final animeRepoUrls = uri.queryParametersAll["anime_url"];
           final novelRepoUrls = uri.queryParametersAll["novel_url"];
           final context = navigatorKey.currentContext;
           if (context == null || !context.mounted) return;
@@ -586,10 +580,6 @@ class _MyAppState extends ConsumerState<MyApp>
           // itself; the *_url lists are what actually gets installed. Show
           // those, or a link can borrow a trusted repo's name for its own.
           final sourcesToAdd = [
-            for (final url in mangaRepoUrls ?? const <String>[])
-              (l10n.manga, url),
-            for (final url in animeRepoUrls ?? const <String>[])
-              (l10n.anime, url),
             for (final url in novelRepoUrls ?? const <String>[])
               (l10n.novel, url),
           ];
@@ -638,8 +628,6 @@ class _MyAppState extends ConsumerState<MyApp>
                       if (context.mounted) Navigator.of(context).pop();
 
                       final validUrls = await _checkValidUrls([
-                        ...mangaRepoUrls ?? [],
-                        ...animeRepoUrls ?? [],
                         ...novelRepoUrls ?? [],
                       ]);
 
@@ -687,8 +675,6 @@ class _MyAppState extends ConsumerState<MyApp>
                       }
 
                       await Future.wait([
-                        addRepos(ItemType.manga, mangaRepoUrls),
-                        addRepos(ItemType.anime, animeRepoUrls),
                         addRepos(ItemType.novel, novelRepoUrls),
                       ]);
                       botToast(l10n.repo_added);
@@ -814,51 +800,6 @@ class _MyAppState extends ConsumerState<MyApp>
       }
     }
     return true;
-  }
-
-  Future<void> _setupMpvConfig() async {
-    try {
-      final provider = StorageProvider();
-      final dir = await provider.getMpvDirectory();
-      final mpvFile = File(p.join(dir!.path, 'mpv.conf'));
-      final inputFile = File(p.join(dir.path, 'input.conf'));
-      final filesMissing =
-          !(await mpvFile.exists()) && !(await inputFile.exists());
-      if (filesMissing) {
-        final bytes = await rootBundle.load("assets/mangayomi_mpv.zip");
-        final archive = ZipDecoder().decodeBytes(bytes.buffer.asUint8List());
-        final shadersDir = Directory(p.join(dir.path, 'shaders'));
-        final scriptsDir = Directory(p.join(dir.path, 'scripts'));
-        await Future.wait([
-          shadersDir.create(recursive: true),
-          scriptsDir.create(recursive: true),
-        ]);
-
-        final List<Future> writes = [];
-        for (final file in archive.files) {
-          final name = file.name;
-          if (name == "mpv.conf") {
-            writes.add(mpvFile.writeAsBytes(file.content));
-          } else if (name == "input.conf") {
-            writes.add(inputFile.writeAsBytes(file.content));
-          } else if (name.startsWith("shaders/") && name.endsWith(".glsl")) {
-            final shaderFile = File(p.join(shadersDir.path, p.basename(name)));
-            writes.add(shaderFile.writeAsBytes(file.content));
-          } else if (name.startsWith("scripts/") &&
-              (name.endsWith(".js") || name.endsWith(".lua"))) {
-            final scriptFile = File(p.join(scriptsDir.path, p.basename(name)));
-            writes.add(scriptFile.writeAsBytes(file.content));
-          }
-        }
-        await Future.wait(writes);
-      }
-    } catch (e) {
-      // Best-effort: on Android the mpv config dir is in shared storage, which
-      // may not be writable until the all-files permission is granted (now
-      // requested lazily, not forced at launch). Skip setup rather than throw;
-      // it's retried on a later launch once the directory is writable. See #740.
-      if (kDebugMode) debugPrint('mpv config setup skipped: $e');
-    }
   }
 
   Future<void> _checkTrackerRefresh() async {

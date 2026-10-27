@@ -48,18 +48,6 @@ dependencies:
   flutter_web_auth_2: ^6.0.0-alpha.9
   numberpicker: ^2.1.2
   encrypt: ^5.0.3
-  media_kit:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit
-  media_kit_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit_video
-  media_kit_libs_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: libs/universal/media_kit_libs_video
   crypto: ^3.0.7
   cupertino_icons: ^1.0.9
   window_manager: ^0.5.1
