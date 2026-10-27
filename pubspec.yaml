@@ -1,6 +1,5 @@
 name: mangayomi
-description: Free and open source manga reader and anime streaming
-  cross-plateform app inspired by Tachiyomi and Aniyomi.
+description: iOS novel reader based on Mangayomi.
 publish_to: "none"
 version: 0.9.9+127
 
@@ -137,7 +136,6 @@ dev_dependencies:
   isar_community_generator: ^3.4.1
   flutter_lints: ^6.0.0
   freezed: ^4.0.3
-  inno_bundle: ^0.9.0
   protoc_plugin: ^23.0.0
 
 flutter:
@@ -148,8 +146,6 @@ flutter:
 
   assets:
     - assets/
-    - path: assets/fonts/
-      platforms: [android]
     - assets/trackers_icons/
     - assets/app_icons/
 
@@ -160,26 +156,6 @@ flutter:
         - asset: assets/fonts/OpenDyslexic/OpenDyslexic-Bold.otf
           weight: 700
 flutter_launcher_icons:
-  android: "launcher_icon"
   ios: true
   remove_alpha_ios: true
   image_path: "assets/app_icons/icon-red.png"
-  min_sdk_android: 21
-  windows:
-    generate: true
-    image_path: "assets/app_icons/icon-red.png"
-  macos:
-    generate: true
-    image_path: "assets/app_icons/icon-red.png"
-inno_bundle:
-  id: 6CB26FFA-E72B-42C3-91E8-594940031CA2
-  publisher: kodjodevf
-  name: Mangayomi
-  url: https://github.com/kodjodevf/mangayomi/
-  support_url: https://github.com/kodjodevf/mangayomi/
-  updates_url: https://github.com/kodjodevf/mangayomi/releases/
-  languages:
-    - english
-    - french
-    - german
-  admin: false
