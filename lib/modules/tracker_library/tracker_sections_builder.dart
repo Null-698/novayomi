@@ -85,7 +85,7 @@ Future<List<TrackSearch>?> Function() _fetchSearch(
 ).notifier).search(query);
 
 Future<List<TrackSearch>?> Function() _fetchGeneralData(
-  WidgetRef ref, int id, {String? rankingType},
+  WidgetRef ref, int id, {String? rankingType}
 ) => () async => ref.read(trackStateProvider(
   track: _lookupTrack(id), itemType: ItemType.novel, widgetRef: ref,
 ).notifier).fetchGeneralData(rankingType: rankingType);
