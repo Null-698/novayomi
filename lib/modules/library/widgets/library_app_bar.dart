@@ -107,8 +107,6 @@ class LibraryAppBar extends ConsumerWidget implements PreferredSizeWidget {
       });
     } else if (value == 2) {
       showImportLocalDialog(context, itemType);
-    } else if (value == 3 && itemType == ItemType.anime) {
-      addTorrent(context);
     }
   }
 
@@ -241,8 +239,6 @@ class LibraryAppBar extends ConsumerWidget implements PreferredSizeWidget {
             color: isNotFiltering ? null : context.shiori.color.accentInk,
           ),
         ),
-        // Torrent stream is anime-only, so the menu's values are not its
-        // indices: keep label and value paired.
         if (isTv)
           Builder(
             builder: (context) {
@@ -250,7 +246,6 @@ class LibraryAppBar extends ConsumerWidget implements PreferredSizeWidget {
                 (context.l10n.update_library, 0),
                 (l10n.open_random_entry, 1),
                 (l10n.import, 2),
-                if (itemType == ItemType.anime) (l10n.torrent_stream, 3),
               ];
               return IconButton(
                 tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
@@ -287,12 +282,6 @@ class LibraryAppBar extends ConsumerWidget implements PreferredSizeWidget {
                 icon: Symbols.file_open_rounded,
                 onSelected: () => _onLibraryMenu(context, ref, 2, manga),
               ),
-              if (itemType == ItemType.anime)
-                ShioriMenuItem(
-                  label: l10n.torrent_stream,
-                  icon: Symbols.podcasts_rounded,
-                  onSelected: () => _onLibraryMenu(context, ref, 3, manga),
-                ),
             ],
           ),
       ],

@@ -25,7 +25,7 @@ import 'package:mangayomi/services/download_manager/m_downloader.dart';
 import 'package:mangayomi/services/chapter_cache.dart';
 import 'package:mangayomi/services/get_chapter_pages.dart';
 import 'package:mangayomi/services/http/m_client.dart';
-import 'package:mangayomi/services/download_manager/m3u8/models/download.dart';
+import 'package:mangayomi/services/download_manager/download_progress.dart';
 import 'package:mangayomi/utils/chapter_recognition.dart';
 import 'package:mangayomi/utils/downloaded_page_file.dart';
 import 'package:mangayomi/utils/extensions/string_extensions.dart';
@@ -332,11 +332,7 @@ Future<void> downloadChapter(
     }
 
     if (pageUrls.isNotEmpty) {
-      // A stalled or failed attempt can leave a partial single-file download
-      // (anime .mp4, novel .html) on disk. The existence check below would then
-      // treat it as already downloaded and mark it complete — a truncated but
-      // "finished" file. If this chapter's download record is not actually
-      // complete, delete any such leftover first so it re-downloads fresh.
+      // Never treat an incomplete prior chapter download as finished.
       final downloadRecord = downloadRepository.getById(chapter.id!);
       if (!(downloadRecord?.isDownload ?? false)) {
         for (final leftover in [
@@ -413,8 +409,6 @@ Future<void> downloadChapter(
         await MDownloader(
           chapter: chapter,
           pageUrls: pages,
-          subtitles: null,
-          subDownloadDir: null,
         ).download((progress) {
           progressWrites = progressWrites.then((_) => setProgress(progress));
         });

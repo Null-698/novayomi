@@ -7,7 +7,6 @@ import 'package:mangayomi/l10n/generated/app_localizations.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/track.dart';
 import 'package:mangayomi/models/track_preference.dart';
-import 'package:mangayomi/modules/library/library_screen.dart';
 import 'package:mangayomi/modules/library/providers/local_archive.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/detail_explore_sheet.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/detail_genre_chip.dart';
@@ -246,27 +245,21 @@ class _MangaInfoHeaderState extends ConsumerState<MangaInfoHeader> {
                                       ? l10n.add_chapters
                                       : l10n.add_episodes,
                                   onPressed: () async {
-                                    final manga = widget.manga;
-                                    if (manga.source == "torrent") {
-                                      addTorrent(context, manga: manga);
-                                    } else {
-                                      final splitChapters =
-                                          manga.itemType == ItemType.novel
-                                          ? await showSplitChaptersDialog(
-                                              context,
-                                            )
-                                          : true;
-                                      if (!context.mounted) return;
-                                      await ref.watch(
-                                        importArchivesFromFileProvider(
-                                          itemType: manga.itemType,
-                                          manga,
-                                          init: false,
-                                          splitChapters: splitChapters,
-                                        ).future,
-                                      );
-                                    }
-                                  },
+                                     final manga = widget.manga;
+                                     final splitChapters =
+                                         manga.itemType == ItemType.novel
+                                         ? await showSplitChaptersDialog(context)
+                                         : true;
+                                     if (!context.mounted) return;
+                                     await ref.watch(
+                                       importArchivesFromFileProvider(
+                                         itemType: manga.itemType,
+                                         manga,
+                                         init: false,
+                                         splitChapters: splitChapters,
+                                       ).future,
+                                     );
+                                   },
                                 ),
                             ],
                           ),

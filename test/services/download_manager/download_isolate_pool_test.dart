@@ -4,14 +4,14 @@ import 'dart:isolate';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/services/download_manager/download_isolate_pool.dart';
-import 'package:mangayomi/services/download_manager/m3u8/models/download.dart';
+import 'package:mangayomi/services/download_manager/download_progress.dart';
 
 void fakeWorker(SendPort mainPort) {
   final port = ReceivePort();
   mainPort.send(port.sendPort);
   port.listen((dynamic task) {
     final reply = task.replyPort as SendPort;
-    reply.send(DownloadProgress(0, 100, ItemType.anime));
+    reply.send(DownloadProgress(0, 100, ItemType.novel));
     if (task.taskId != 'blocked') reply.send(DownloadComplete());
   });
 }
@@ -30,7 +30,7 @@ void main() {
           taskId: 'cold',
           pageUrls: [],
           concurrentDownloads: 1,
-          itemType: ItemType.anime,
+          itemType: ItemType.novel,
           onProgress: (_) => fail('Cancelled task started'),
           onComplete: () => fail('Cancelled task completed'),
           onError: cancelled.complete,
@@ -63,7 +63,7 @@ void main() {
           taskId: 'blocked',
           pageUrls: [],
           concurrentDownloads: 1,
-          itemType: ItemType.anime,
+          itemType: ItemType.novel,
           onProgress: (_) {
             if (!started.isCompleted) started.complete();
           },
@@ -75,7 +75,7 @@ void main() {
           taskId: 'queued',
           pageUrls: [],
           concurrentDownloads: 1,
-          itemType: ItemType.anime,
+          itemType: ItemType.novel,
           onProgress: (_) {},
           onComplete: () => fail('Cancelled waiting task completed'),
           onError: queuedCancelled.complete,
@@ -95,7 +95,7 @@ void main() {
           taskId: 'next',
           pageUrls: [],
           concurrentDownloads: 1,
-          itemType: ItemType.anime,
+          itemType: ItemType.novel,
           onProgress: (_) {},
           onComplete: completed.complete,
           onError: completed.completeError,

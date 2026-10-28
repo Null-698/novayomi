@@ -2,7 +2,6 @@ import UIKit
 import Flutter
 import AVFoundation
 import MediaPlayer
-import Libmtorrentserver
 import UniformTypeIdentifiers
 
 @main
@@ -37,28 +36,6 @@ import UniformTypeIdentifiers
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let messenger = engineBridge.applicationRegistrar.messenger()
-
-    let mChannel = FlutterMethodChannel(
-      name: "com.kodjodevf.mangayomi.libmtorrentserver",
-      binaryMessenger: messenger
-    )
-    mChannel.setMethodCallHandler({
-      (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
-      switch call.method {
-      case "start":
-        let args = call.arguments as? Dictionary<String, Any>
-        let config = args?["config"] as? String
-        var error: NSError?
-        let mPort = UnsafeMutablePointer<Int>.allocate(capacity: MemoryLayout<Int>.stride)
-        if LibmtorrentserverStart(config, mPort, &error) {
-          result(mPort.pointee)
-        } else {
-          result(FlutterError(code: "ERROR", message: error.debugDescription, details: nil))
-        }
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    })
 
     let backgroundTaskChannel = FlutterMethodChannel(
       name: "com.kodjodevf.mangayomi.background_task",

@@ -16,7 +16,6 @@ import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/library/tv_home/tv_anime_home_view.dart';
 import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
-import 'package:mangayomi/modules/library/providers/add_torrent.dart';
 import 'package:mangayomi/modules/library/providers/isar_providers.dart';
 import 'package:mangayomi/modules/library/providers/library_filter_provider.dart';
 import 'package:mangayomi/modules/library/providers/library_state_provider.dart';
@@ -726,75 +725,3 @@ class _DefaultCategoryBadge extends ConsumerWidget {
   }
 }
 
-/// Top-level utility — shows a dialog to add a torrent by URL or .torrent file.
-void addTorrent(BuildContext context, {Manga? manga}) {
-  final l10n = context.l10n;
-  String torrentUrl = "";
-  bool isLoading = false;
-  showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => Consumer(
-        builder: (context, ref, _) {
-          // From the URL when one is given, else from a file picked on the
-          // device.
-          Future<void> add({required bool fromUrl}) async {
-            setState(() => isLoading = true);
-            try {
-              await ref.watch(
-                addTorrentFromUrlOrFromFileProvider(
-                  manga,
-                  init: true,
-                  url: fromUrl ? torrentUrl : null,
-                ).future,
-              );
-            } catch (_) {}
-            if (!context.mounted) return;
-            setState(() => isLoading = false);
-            Navigator.pop(context);
-          }
-
-          return PopScope(
-            canPop: !isLoading,
-            child: ShioriDialog(
-              title: l10n.add_torrent,
-              content: TextField(
-                enabled: !isLoading,
-                keyboardType: TextInputType.url,
-                onChanged: (value) => setState(() => torrentUrl = value),
-                decoration: InputDecoration(
-                  labelText: l10n.torrent_url,
-                  hintText: l10n.enter_torrent_hint_text,
-                ),
-              ),
-              actions: [
-                ShioriButton.quiet(
-                  label: l10n.cancel,
-                  onPressed: isLoading ? null : () => Navigator.pop(context),
-                ),
-                if (isLoading)
-                  const Padding(
-                    padding: EdgeInsets.all(ShioriSpace.s8),
-                    child: ShioriLoading.inline(),
-                  )
-                else ...[
-                  ShioriButton.secondary(
-                    icon: Symbols.file_open_rounded,
-                    label: l10n.import_files,
-                    onPressed: () => add(fromUrl: false),
-                  ),
-                  ShioriButton(
-                    label: l10n.add,
-                    onPressed: torrentUrl.trim().isEmpty
-                        ? null
-                        : () => add(fromUrl: true),
-                  ),
-                ],
-              ],
-            ),
-          );
-        },
-      ),
-    ),
-  );
-}

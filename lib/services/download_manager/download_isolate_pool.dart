@@ -9,13 +9,10 @@ import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/page.dart';
 import 'package:mangayomi/services/http/m_client.dart';
 import 'package:mangayomi/services/http/rhttp/src/model/settings.dart';
-import 'package:mangayomi/services/download_manager/m3u8/models/download.dart';
-import 'package:mangayomi/services/download_manager/m3u8/models/ts_info.dart';
+import 'package:mangayomi/services/download_manager/download_progress.dart';
 import 'package:mangayomi/src/rust/frb_generated.dart';
 import 'package:mangayomi/utils/downloaded_page_file.dart';
-import 'package:mangayomi/utils/extensions/string_extensions.dart';
 import 'package:path/path.dart' as path;
-import 'package:encrypt/encrypt.dart' as encrypt;
 
 final downloadTaskCancellation = <String, bool>{};
 
@@ -169,45 +166,6 @@ class DownloadIsolatePool {
     });
   }
 
-  /// Submit an M3U8 segment download task
-  Future<void> submitM3u8Download({
-    required String taskId,
-    required List<TsInfo> segments,
-    required String tempDir,
-    required Uint8List? key,
-    required Uint8List? iv,
-    required int? mediaSequence,
-    required int concurrentDownloads,
-    required Map<String, String>? headers,
-    required ItemType itemType,
-    required void Function(DownloadProgress) onProgress,
-    required void Function() onComplete,
-    required void Function(Exception) onError,
-  }) async {
-    if (!await _prepareSubmission(taskId, onError)) return;
-
-    final receivePort = ReceivePort();
-    final task = _DownloadTask(
-      taskId: taskId,
-      type: _TaskType.m3u8Download,
-      params: M3u8DownloadParams(
-        segments: segments,
-        tempDir: tempDir,
-        key: key,
-        iv: iv,
-        mediaSequence: mediaSequence,
-        concurrentDownloads: concurrentDownloads,
-        headers: headers,
-        itemType: itemType,
-      ),
-      sendPort: receivePort.sendPort,
-    );
-
-    _listenToTask(receivePort, taskId, onProgress, onComplete, onError);
-
-    _enqueueTask(task);
-  }
-
   /// Cancel a download task
   void cancelTask(String taskId) {
     if (downloadTaskCancellation.containsKey(taskId)) {
@@ -283,7 +241,7 @@ class DownloadIsolatePool {
 }
 
 /// Supported task types
-enum _TaskType { fileDownload, m3u8Download }
+enum _TaskType { fileDownload }
 
 /// Download task
 class _DownloadTask {
@@ -309,29 +267,6 @@ class FileDownloadParams {
   FileDownloadParams({
     required this.pageUrls,
     required this.concurrentDownloads,
-    required this.itemType,
-  });
-}
-
-/// Parameters for M3U8 download
-class M3u8DownloadParams {
-  final List<TsInfo> segments;
-  final String tempDir;
-  final Uint8List? key;
-  final Uint8List? iv;
-  final int? mediaSequence;
-  final int concurrentDownloads;
-  final Map<String, String>? headers;
-  final ItemType itemType;
-
-  M3u8DownloadParams({
-    required this.segments,
-    required this.tempDir,
-    required this.key,
-    required this.iv,
-    required this.mediaSequence,
-    required this.concurrentDownloads,
-    required this.headers,
     required this.itemType,
   });
 }
@@ -503,12 +438,6 @@ Future<void> _runWorker(SendPort mainPort, Client httpClient) async {
             message.replyPort,
             httpClient,
           );
-        } else if (message.type == _TaskType.m3u8Download) {
-          await processM3u8Download(
-            message.params as M3u8DownloadParams,
-            message.replyPort,
-            httpClient,
-          );
         }
       } catch (e) {
         message.replyPort.send(DownloadPoolException('Task failed', e));
@@ -533,19 +462,17 @@ Future<void> _processFileDownload(
       while (queue.isNotEmpty &&
           activeTasks.length < params.concurrentDownloads) {
         final pageUrl = queue.removeFirst();
-        final task = _downloadFile(pageUrl, client, params.itemType, replyPort)
+        final task = _downloadFile(pageUrl, client)
             .then((_) {
-              if (params.itemType != ItemType.anime) {
-                completed++;
-                replyPort.send(
-                  DownloadProgress(
-                    pageUrl: pageUrl,
-                    completed,
-                    total,
-                    params.itemType,
-                  ),
-                );
-              }
+              completed++;
+              replyPort.send(
+                DownloadProgress(
+                  pageUrl: pageUrl,
+                  completed,
+                  total,
+                  params.itemType,
+                ),
+              );
             })
             .catchError((error) {
               replyPort.send(
@@ -572,235 +499,28 @@ Future<void> _processFileDownload(
   }
 }
 
-/// Download an individual file
-Future<void> _downloadFile(
-  PageUrl pageUrl,
-  Client client,
-  ItemType itemType,
-  SendPort replyPort,
-) async {
+/// Download an individual image page.
+Future<void> _downloadFile(PageUrl pageUrl, Client client) async {
   try {
-    if (itemType != ItemType.anime) {
-      final response = await _withRetry(
-        () => client
-            .get(Uri.parse(pageUrl.url), headers: pageUrl.headers)
-            .timeout(const Duration(seconds: 30)),
-        3,
+    final response = await _withRetry(
+      () => client
+          .get(Uri.parse(pageUrl.url), headers: pageUrl.headers)
+          .timeout(const Duration(seconds: 30)),
+      3,
+    );
+    if (response.statusCode != 200) {
+      throw DownloadPoolException(
+        'Failed to download file: ${pageUrl.fileName!}',
       );
-      if (response.statusCode != 200) {
-        throw DownloadPoolException(
-          'Failed to download file: ${pageUrl.fileName!}',
-        );
-      }
-
-      final bytes = response.bodyBytes;
-      final realExt = detectImageExtension(bytes);
-      // fileName has no extension at this point (see download_provider.dart)
-      // - the real one is only knowable now that the bytes are in hand.
-      final targetFile = File(path.setExtension(pageUrl.fileName!, realExt));
-      await targetFile.writeAsBytes(bytes);
-    } else {
-      // Streaming for videos (saves RAM)
-      await _withRetry(() async {
-        var request = Request('GET', Uri.parse(pageUrl.url));
-        request.headers.addAll(pageUrl.headers ?? {});
-        // Connection/response-headers timeout. Without it, a wifi drop after
-        // streaming has begun makes the stream idle-timeout fire, retry, and
-        // then hang forever on this send with no network — the download stalls
-        // with no progress, no retry, and no error. Bail so _withRetry cycles
-        // and, once exhausted, the failure propagates to the UI.
-        StreamedResponse response = await client
-            .send(request)
-            .timeout(const Duration(seconds: 30));
-        // Accept any 2xx — including 206 Partial Content, which the server
-        // returns when the source extension sends `Range: bytes=0-` on the
-        // streaming request (e.g. AnimeGG). Rejecting 206 here caused 3
-        // retries → silent stall.
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw DownloadPoolException(
-            'Failed to download file: ${pageUrl.fileName!} '
-            '(status ${response.statusCode})',
-          );
-        }
-        int total = response.contentLength ?? 0;
-        int received = 0;
-        // Throttle progress. Emitting on every chunk floods the main isolate
-        // with synchronous DB writes (setProgress) and freezes the whole UI
-        // while a download runs — worst with large single files (anime .mp4).
-        // Send at most once per 1% step (known length) or every 250ms
-        // (unknown length); the final 100% is delivered by onComplete.
-        int lastPercent = -1;
-        final progressWatch = Stopwatch()..start();
-
-        final file = File(pageUrl.fileName!);
-        final sink = file.openWrite();
-        try {
-          // Idle timeout: if no bytes arrive for 30s the connection has
-          // stalled, so fail (and retry) instead of hanging the whole
-          // download forever with no progress.
-          await for (var value in response.stream.timeout(
-            const Duration(seconds: 30),
-            onTimeout: (sink) => sink.addError(
-              TimeoutException('Download stalled (no data for 30s)'),
-            ),
-          )) {
-            sink.add(value);
-            received += value.length;
-            final percent = total > 0 ? (received / total * 100).toInt() : -1;
-            final shouldSend = percent >= 0
-                ? percent != lastPercent
-                : progressWatch.elapsedMilliseconds >= 250;
-            if (shouldSend) {
-              lastPercent = percent;
-              if (percent < 0) progressWatch.reset();
-              try {
-                replyPort.send(
-                  DownloadProgress(
-                    percent < 0 ? 0 : percent,
-                    100,
-                    pageUrl: pageUrl,
-                    itemType,
-                  ),
-                );
-              } catch (_) {}
-            }
-          }
-        } finally {
-          await sink.flush();
-          await sink.close();
-        }
-      }, 3);
     }
+    final realExt = detectImageExtension(response.bodyBytes);
+    final targetFile = File(path.setExtension(pageUrl.fileName!, realExt));
+    await targetFile.writeAsBytes(response.bodyBytes);
   } catch (e) {
     throw DownloadPoolException(
       'Failed to process file: ${pageUrl.fileName!}',
       e,
     );
-  }
-}
-
-/// Process an M3U8 download
-Future<void> processM3u8Download(
-  M3u8DownloadParams params,
-  SendPort replyPort,
-  Client client,
-) async {
-  int completed = 0;
-  final total = params.segments.length;
-  final queue = Queue<TsInfo>.from(params.segments);
-  Object? failure;
-  Future<void> worker() async {
-    while (queue.isNotEmpty && failure == null) {
-      final segment = queue.removeFirst();
-      try {
-        await _downloadSegment(segment, params, client);
-        completed++;
-        replyPort.send(
-          DownloadProgress(completed, total, params.itemType, segment: segment),
-        );
-      } catch (error) {
-        failure ??= error;
-      }
-    }
-  }
-
-  // Refill each slot immediately; a slow segment must not hold up a batch.
-  // Settle all writers before reporting failure or reusing this worker.
-  await Future.wait(
-    List.generate(params.concurrentDownloads.clamp(1, 8), (_) => worker()),
-  );
-  if (failure != null) {
-    replyPort.send(DownloadPoolException('M3U8 download failed', failure));
-  } else {
-    replyPort.send(DownloadComplete());
-  }
-}
-
-/// Download a TS segment
-Future<void> _downloadSegment(
-  TsInfo ts,
-  M3u8DownloadParams params,
-  Client client,
-) async {
-  final file = File(path.join(params.tempDir, '${ts.name}.ts'));
-  final partial = File('${file.path}.part');
-  try {
-    await _withRetry(() async {
-      try {
-        final request = Request('GET', Uri.parse(ts.url));
-        request.headers.addAll(params.headers ?? {});
-        if (!request.headers.keys.any(
-          (name) => name.toLowerCase() == HttpHeaders.rangeHeader,
-        )) {
-          request.headers[HttpHeaders.rangeHeader] = 'bytes=0-';
-        }
-        final response = await client
-            .send(request)
-            .timeout(const Duration(seconds: 30));
-        if (response.statusCode != 200 && response.statusCode != 206) {
-          await response.stream.listen((_) {}).cancel();
-          throw DownloadPoolException(
-            'Failed to download segment: ${ts.name} (status ${response.statusCode})',
-          );
-        }
-        final sink = partial.openWrite();
-        try {
-          await sink.addStream(
-            response.stream.timeout(const Duration(seconds: 30)),
-          );
-          await sink.flush();
-        } finally {
-          await sink.close();
-        }
-        final length = await partial.length();
-        if (length == 0 ||
-            (response.contentLength != null &&
-                length != response.contentLength)) {
-          throw DownloadPoolException('Incomplete segment: ${ts.name}');
-        }
-        if (params.key != null) {
-          final bytes = await partial.readAsBytes();
-          final index = int.parse(ts.name.substringAfter('TS_'));
-          final decrypted = _aesDecrypt(
-            (params.mediaSequence ?? 0) + index - 1,
-            bytes,
-            params.key!,
-            iv: params.iv,
-          );
-          await partial.writeAsBytes(decrypted);
-        }
-        // Only complete, decrypted segments may be reused after a retry.
-        await partial.rename(file.path);
-      } catch (_) {
-        if (await partial.exists()) await partial.delete();
-        rethrow;
-      }
-    }, 3);
-  } catch (e) {
-    throw DownloadPoolException('Failed to process segment: ${ts.name}', e);
-  }
-}
-
-/// AES decryption
-Uint8List _aesDecrypt(
-  int sequence,
-  Uint8List encrypted,
-  Uint8List key, {
-  Uint8List? iv,
-}) {
-  try {
-    if (iv == null) {
-      iv = Uint8List(16);
-      ByteData.view(iv.buffer).setUint64(8, sequence);
-    }
-    final encrypter = encrypt.Encrypter(
-      encrypt.AES(encrypt.Key(key), mode: encrypt.AESMode.cbc),
-    );
-    return Uint8List.fromList(
-      encrypter.decryptBytes(encrypt.Encrypted(encrypted), iv: encrypt.IV(iv)),
-    );
-  } catch (e) {
-    throw DownloadPoolException('Decryption failed', e);
   }
 }
 

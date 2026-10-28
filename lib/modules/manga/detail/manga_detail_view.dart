@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/eval/model/m_bridge.dart';
 import 'package:mangayomi/models/chapter.dart';
 import 'package:mangayomi/models/manga.dart';
-import 'package:mangayomi/modules/library/library_screen.dart';
 import 'package:mangayomi/modules/library/providers/library_filter_provider.dart';
 import 'package:mangayomi/modules/library/providers/local_archive.dart';
 import 'package:mangayomi/modules/manga/detail/chapter_bulk_actions.dart';
@@ -361,37 +360,22 @@ class _MangaDetailViewState extends ConsumerState<MangaDetailView>
                                                         ? l10n.add_chapters
                                                         : l10n.add_episodes,
                                                     onPressed: () async {
-                                                      final manga =
-                                                          widget.manga;
-                                                      if (manga!.source ==
-                                                          "torrent") {
-                                                        addTorrent(
-                                                          context,
-                                                          manga: manga,
-                                                        );
-                                                      } else {
-                                                        final splitChapters =
-                                                            manga.itemType ==
-                                                                ItemType.novel
-                                                            ? await showSplitChaptersDialog(
-                                                                context,
-                                                              )
-                                                            : true;
-                                                        if (!context.mounted) {
-                                                          return;
-                                                        }
-                                                        await ref.watch(
-                                                          importArchivesFromFileProvider(
-                                                            itemType:
-                                                                manga.itemType,
-                                                            manga,
-                                                            init: false,
-                                                            splitChapters:
-                                                                splitChapters,
-                                                          ).future,
-                                                        );
-                                                      }
-                                                    },
+                                                       final manga = widget.manga;
+                                                       if (manga == null) return;
+                                                       final splitChapters =
+                                                           manga.itemType == ItemType.novel
+                                                           ? await showSplitChaptersDialog(context)
+                                                           : true;
+                                                       if (!context.mounted) return;
+                                                       await ref.watch(
+                                                         importArchivesFromFileProvider(
+                                                           itemType: manga.itemType,
+                                                           manga,
+                                                           init: false,
+                                                           splitChapters: splitChapters,
+                                                         ).future,
+                                                       );
+                                                     },
                                                   ),
                                               ],
                                             ),
