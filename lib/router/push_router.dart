@@ -19,8 +19,6 @@ Future<void> pushMangaReaderView({
   if (sourceExist || chapter.manga.value!.isLocalArchive!) {
     switch (chapter.manga.value!.itemType) {
       case ItemType.manga:
-        await context.push('/mangaReaderView', extra: chapter.id!);
-        break;
       case ItemType.anime:
         botToast('Novayomi supports novels only.');
         break;
@@ -52,8 +50,6 @@ void pushReplacementMangaReaderView({
 }) {
   switch (chapter.manga.value!.itemType) {
     case ItemType.manga:
-      context.pushReplacement('/mangaReaderView', extra: chapter.id!);
-      break;
     case ItemType.anime:
       break;
     case ItemType.novel:

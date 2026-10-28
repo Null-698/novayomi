@@ -48,7 +48,6 @@ import 'package:mangayomi/modules/history/history_screen.dart';
 import 'package:mangayomi/modules/library/library_screen.dart';
 import 'package:mangayomi/modules/manga/detail/manga_detail_main.dart';
 import 'package:mangayomi/modules/manga/home/manga_home_screen.dart';
-import 'package:mangayomi/modules/manga/reader/reader_view.dart';
 import 'package:mangayomi/modules/more/about/about_screen.dart';
 import 'package:mangayomi/modules/more/about/error_reports_screen.dart';
 import 'package:mangayomi/modules/more/about/licenses_screen.dart';
@@ -59,7 +58,6 @@ import 'package:mangayomi/modules/more/settings/browse/browse_screen.dart';
 import 'package:mangayomi/modules/more/settings/browse/extension_server_screen.dart';
 import 'package:mangayomi/modules/more/settings/general/general_screen.dart';
 import 'package:mangayomi/modules/more/settings/reader/novel_reader_screen.dart';
-import 'package:mangayomi/modules/more/settings/reader/reader_screen.dart';
 import 'package:mangayomi/modules/more/settings/settings_screen.dart';
 import 'package:mangayomi/modules/more/settings/security/security_screen.dart';
 import 'package:mangayomi/core/navigation/app_navigator.dart';
@@ -220,13 +218,6 @@ class RouterNotifier extends ChangeNotifier {
       builder: (id) => MangaReaderDetail(mangaId: id),
     ),
     _genericRoute<int>(
-      name: "mangaReaderView",
-      // Keyed by chapter id so a chapter-to-chapter pushReplacement fully
-      // remounts instead of reusing the Element and going stale.
-      builder: (id) =>
-          MangaReaderView(key: ValueKey('mangaReader-$id'), chapterId: id),
-    ),
-    _genericRoute<int>(
       name: "novelReaderView",
       builder: (id) =>
           NovelReaderView(key: ValueKey('novelReader-$id'), chapterId: id),
@@ -265,12 +256,6 @@ class RouterNotifier extends ChangeNotifier {
     ),
     _genericRoute(name: "statistics", child: const StatisticsScreen()),
     _genericRoute(name: "general", child: const GeneralScreen()),
-    _genericRoute(name: "readerMode", child: const ReaderScreen()),
-    _genericRoute<int>(
-      name: "readerSettingsSection",
-      builder: (index) =>
-          ReaderScreen(section: ReaderSettingsSection.values[index]),
-    ),
     _genericRoute(name: "novelReaderMode", child: const NovelReaderScreen()),
     _genericRoute(name: "browseS", child: const BrowseSScreen()),
     _genericRoute(
