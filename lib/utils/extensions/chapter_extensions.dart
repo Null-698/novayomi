@@ -6,6 +6,7 @@ import 'package:mangayomi/repositories/download_repository.dart';
 import 'package:mangayomi/repositories/track_repository.dart';
 import 'package:mangayomi/models/chapter.dart';
 import 'package:mangayomi/models/manga.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 import 'package:mangayomi/models/track.dart';
 import 'package:mangayomi/providers/track_state_providers.dart';
 import 'package:mangayomi/services/local_folders.dart';
@@ -123,6 +124,7 @@ extension ChapterExtension on Chapter {
     );
 
     for (var track in tracks) {
+      if (!isSupportedNovelTracker(track.syncId)) continue;
       final service = trackRepository.findPreferenceBySyncId(track.syncId);
       if (!(service == null || chapterNumber <= (track.lastChapterRead ?? 0))) {
         if (track.status != TrackStatus.completed) {
@@ -133,7 +135,7 @@ extension ChapterExtension on Chapter {
             track.status = TrackStatus.completed;
             track.finishedReadingDate = DateTime.now().millisecondsSinceEpoch;
           } else {
-            track.status = manga.itemType == ItemType.manga
+            track.status = isReadingTrackerItemType(manga.itemType)
                 ? TrackStatus.reading
                 : TrackStatus.watching;
             if (isFirstRead) {

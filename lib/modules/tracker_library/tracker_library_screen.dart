@@ -7,7 +7,6 @@ import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/track.dart';
 import 'package:mangayomi/models/track_preference.dart';
 import 'package:mangayomi/modules/library/widgets/search_text_form_field.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/manga/detail/providers/track_state_providers.dart';
 import 'package:mangayomi/modules/tracker_library/tracker_library_section.dart';
 import 'package:mangayomi/modules/tracker_library/tracker_library_title.dart';
@@ -15,11 +14,11 @@ import 'package:mangayomi/modules/tracker_library/tracker_section_screen.dart';
 import 'package:mangayomi/modules/tracker_library/tracker_sections_builder.dart';
 import 'package:mangayomi/modules/tracker_library/tracker_switch_dialog.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
-import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/repositories/track_repository.dart';
 import 'package:mangayomi/repositories/tracker_library_cache_repository.dart';
 import 'package:mangayomi/utils/constant.dart';
 import 'package:mangayomi/utils/item_type_localization.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 import 'package:shiori/shiori.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
@@ -51,32 +50,14 @@ class _TrackerLibraryScreenState extends ConsumerState<TrackerLibraryScreen> {
   Widget build(BuildContext context) {
     final l10n = l10nLocalizations(context)!;
     final lastLocation = ref.watch(lastTrackerLibraryLocationStateProvider);
-    final hideItems = ref.watch(hideItemsStateProvider);
-    final animeOnly = ref.watch(animeOnlyTvModeProvider);
-    final showManga = !animeOnly && !hideItems.contains("/MangaLibrary");
-    final showAnime = !hideItems.contains("/AnimeLibrary");
-
-    var trackerProvider =
-        TrackerProviders.values.firstWhereOrNull(
-          (t) => t.syncId == lastLocation.$1,
+    // The tracker library now contains novels only. Historical values still
+    // deserialize, but unsupported video providers never become active.
+    final trackerProvider = TrackerProviders.values.firstWhereOrNull(
+          (t) => t.syncId == lastLocation.$1 &&
+              isSupportedNovelTracker(t.syncId),
         ) ??
         TrackerProviders.myAnimeList;
-    if (!showAnime &&
-        showManga &&
-        (trackerProvider == TrackerProviders.simkl ||
-            trackerProvider == TrackerProviders.trakt)) {
-      trackerProvider = TrackerProviders.myAnimeList;
-    }
-    final isSimklOrTrakt =
-        trackerProvider.syncId == TrackerProviders.simkl.syncId ||
-        trackerProvider.syncId == TrackerProviders.trakt.syncId;
-    final itemType = isSimklOrTrakt
-        ? ItemType.anime
-        : !showManga && showAnime
-        ? ItemType.anime
-        : showManga && !showAnime
-        ? ItemType.manga
-        : (lastLocation.$2 ? ItemType.manga : ItemType.anime);
+    const itemType = ItemType.novel;
 
     _sections = buildTrackerSections(
       ref: ref,
@@ -88,11 +69,7 @@ class _TrackerLibraryScreenState extends ConsumerState<TrackerLibraryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: TrackerLibraryTitle(
-          text:
-              (trackerProvider.syncId == TrackerProviders.simkl.syncId ||
-                  trackerProvider.syncId == TrackerProviders.trakt.syncId)
-              ? trackerProvider.name
-              : "${trackerProvider.name} | ${itemType.localized(l10n)}",
+          text: "${trackerProvider.name} | ${itemType.localized(l10n)}",
           syncId: trackerProvider.syncId,
         ),
         leading: !_isSearch ? null : Container(),
@@ -181,7 +158,9 @@ class _TrackerLibraryScreenState extends ConsumerState<TrackerLibraryScreen> {
         child: StreamBuilder(
           stream: trackRepository.watchAllNotRefreshing(),
           builder: (context, snapshot) {
-            _preferences = snapshot.hasData ? snapshot.data ?? [] : [];
+            _preferences = (snapshot.data ?? <TrackPreference>[])
+                .where((p) => isSupportedNovelTracker(p.syncId))
+                .toList();
             return _preferences.any((p) => p.syncId == trackerProvider.syncId)
                 ? RefreshIndicator(
                     onRefresh: () async {

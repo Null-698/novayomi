@@ -10,6 +10,7 @@ import 'package:mangayomi/modules/manga/detail/widgets/tracker_widget.dart';
 import 'package:mangayomi/modules/more/settings/track/widgets/track_listile.dart';
 import 'package:mangayomi/repositories/track_repository.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 /// Opens the tracker list bottom sheet for [manga]. [entries] is the set of
@@ -21,6 +22,8 @@ void openTrackingMenu({
   required Manga manga,
   required List<TrackPreference> entries,
 }) {
+  // Keep older video tracker records without offering unsupported updates.
+  final novelEntries = entries.where((e) => isSupportedNovelTracker(e.syncId)).toList();
   showShioriSheet<void>(
     context,
     title: context.l10n.tracking,
@@ -37,13 +40,13 @@ void openTrackingMenu({
           ),
           child: SuperListView.separated(
             padding: const EdgeInsets.all(0),
-            itemCount: entries.length,
+            itemCount: novelEntries.length,
             primary: false,
             shrinkWrap: true,
             itemBuilder: (context, index) {
               return StreamBuilder(
                 stream: trackRepository.watchBySyncIdAndMangaId(
-                  entries[index].syncId,
+                  novelEntries[index].syncId,
                   manga.id!,
                 ),
                 builder: (context, snapshot) {
@@ -51,7 +54,7 @@ void openTrackingMenu({
                   return trackRes!.isNotEmpty
                       ? TrackerWidget(
                           mangaId: manga.id!,
-                          syncId: entries[index].syncId!,
+                          syncId: novelEntries[index].syncId!,
                           trackRes: trackRes.first,
                           itemType: manga.itemType,
                         )
@@ -64,7 +67,7 @@ void openTrackingMenu({
                                   itemType: manga.itemType,
                                   track: Track(
                                     status: TrackStatus.planToRead,
-                                    syncId: entries[index].syncId!,
+                                    syncId: novelEntries[index].syncId!,
                                     title: manga.name!,
                                   ),
                                 );
@@ -80,11 +83,11 @@ void openTrackingMenu({
                                   .setTrackSearch(
                                     trackSearch,
                                     manga.id!,
-                                    entries[index].syncId!,
+                                    novelEntries[index].syncId!,
                                   );
                             }
                           },
-                          id: entries[index].syncId!,
+                          id: novelEntries[index].syncId!,
                           entries: const [],
                         );
                 },

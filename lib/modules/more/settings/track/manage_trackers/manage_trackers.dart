@@ -8,6 +8,7 @@ import 'package:mangayomi/modules/widgets/tracker_account_avatar.dart';
 import 'package:mangayomi/repositories/track_repository.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/utils/constant.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 
 class ManageTrackersScreen extends StatelessWidget {
   const ManageTrackersScreen({super.key});
@@ -22,7 +23,7 @@ class ManageTrackersScreen extends StatelessWidget {
         builder: (context, snapshot) {
           final trackers =
               (snapshot.data ?? trackRepository.getAllPreferences())
-                  .where((p) => p.syncId != -1)
+                  .where((p) => isSupportedNovelTracker(p.syncId))
                   .toList();
           if (trackers.isEmpty) {
             return ShioriEmptyState(

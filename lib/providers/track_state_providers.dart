@@ -1,4 +1,5 @@
 import 'package:mangayomi/models/manga.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 import 'package:mangayomi/models/track.dart';
 import 'package:mangayomi/models/track_search.dart';
 import 'package:mangayomi/providers/track_providers.dart';
@@ -7,8 +8,6 @@ import 'package:mangayomi/services/trackers/anilist.dart';
 import 'package:mangayomi/services/trackers/base_tracker.dart';
 import 'package:mangayomi/services/trackers/kitsu.dart';
 import 'package:mangayomi/services/trackers/myanimelist.dart';
-import 'package:mangayomi/services/trackers/simkl.dart';
-import 'package:mangayomi/services/trackers/trakt_tv.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'track_state_providers.g.dart';
 
@@ -41,20 +40,6 @@ class TrackState extends _$TrackState {
       ),
       3 => widgetRef.read(
         kitsuProvider(
-          syncId: syncId,
-          itemType: itemType,
-          widgetRef: widgetRef,
-        ).notifier,
-      ),
-      4 => widgetRef.read(
-        simklProvider(
-          syncId: syncId,
-          itemType: itemType,
-          widgetRef: widgetRef,
-        ).notifier,
-      ),
-      5 => widgetRef.read(
-        traktTvProvider(
           syncId: syncId,
           itemType: itemType,
           widgetRef: widgetRef,
@@ -116,7 +101,7 @@ class TrackState extends _$TrackState {
     }
   }
 
-  bool get _isManga => itemType == ItemType.manga;
+  bool get _isManga => isReadingTrackerItemType(itemType);
 
   Future setTrackSearch(
     TrackSearch trackSearch,
@@ -146,10 +131,6 @@ class TrackState extends _$TrackState {
       findManga ??= await tracker.update(newTrack, _isManga);
     } else if (syncId == TrackerProviders.kitsu.syncId) {
       findManga = await tracker.update(newTrack, _isManga);
-    } else if (syncId == TrackerProviders.simkl.syncId) {
-      findManga = await tracker.findLibItem(newTrack, _isManga);
-    } else if (syncId == TrackerProviders.trakt.syncId) {
-      findManga = await tracker.findLibItem(newTrack, _isManga);
     }
     writeBack(findManga!);
   }
@@ -208,20 +189,6 @@ class TrackState extends _$TrackState {
       ).notifier,
     );
     return await tracker.fetchPlanningData(isManga: _isManga);
-  }
-
-  // Trakt exclusive: Watchlist
-  Future<List<TrackSearch>?> fetchWatchlistData() async {
-    final syncId = track!.syncId!;
-    if (syncId != TrackerProviders.trakt.syncId) return [];
-    final tracker = widgetRef.read(
-      traktTvProvider(
-        syncId: syncId,
-        itemType: itemType,
-        widgetRef: widgetRef,
-      ).notifier,
-    );
-    return await tracker.fetchWatchlistData(isManga: _isManga);
   }
 
   Future<bool> checkRefresh() async {
