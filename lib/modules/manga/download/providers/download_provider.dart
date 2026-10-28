@@ -10,7 +10,6 @@ import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/page.dart';
 import 'package:mangayomi/repositories/download_repository.dart';
 import 'package:mangayomi/models/chapter.dart';
-import 'package:mangayomi/models/video.dart';
 import 'package:mangayomi/modules/library/providers/file_scanner.dart';
 import 'package:mangayomi/modules/manga/detail/providers/export_metadata.dart';
 import 'package:mangayomi/modules/manga/download/providers/convert_to_cbz.dart';
@@ -23,11 +22,9 @@ import 'package:mangayomi/providers/storage_provider.dart';
 import 'package:mangayomi/router/router.dart';
 import 'package:mangayomi/services/download_manager/download_queue_order.dart';
 import 'package:mangayomi/services/download_manager/m_downloader.dart';
-import 'package:mangayomi/services/get_video_list.dart';
 import 'package:mangayomi/services/chapter_cache.dart';
 import 'package:mangayomi/services/get_chapter_pages.dart';
 import 'package:mangayomi/services/http/m_client.dart';
-import 'package:mangayomi/services/download_manager/m3u8/m3u8_downloader.dart';
 import 'package:mangayomi/services/download_manager/m3u8/models/download.dart';
 import 'package:mangayomi/utils/chapter_recognition.dart';
 import 'package:mangayomi/utils/downloaded_page_file.dart';
@@ -113,6 +110,11 @@ Future<void> downloadChapter(
     await storageProvider.requestPermission();
     final manga = chapter.manga.value!;
     final itemType = manga.itemType;
+    if (itemType == ItemType.anime) {
+      botToast('Video downloads are not supported in Novayomi.');
+      await markDownloadFailed(chapter);
+      return;
+    }
     final mangaMainDirectory = (await storageProvider.getMangaMainDirectory(
       chapter,
     ))!;
@@ -135,33 +137,20 @@ Future<void> downloadChapter(
       // the chapter is done, with a page standing in for it until then.
       fetchCover: false,
     );
-    List<Track>? subtitles;
     bool isOk = false;
     // Reason the download couldn't be prepared, if any — used to fail loudly
     // instead of hanging in the wait-loop below.
     String? startFailure;
     final chapterName = chapter.name!.replaceForbiddenCharacters(' ');
-    final chapterDirectory = itemType == ItemType.anime
-        ? Directory(p.join(mangaMainDirectory.path, chapterName))
-        : (await storageProvider.getMangaChapterDirectory(
-            chapter,
-            mangaMainDirectory: mangaMainDirectory,
-          ))!;
-    if (itemType != ItemType.anime) {
-      await storageProvider.createDirectorySafely(chapterDirectory.path);
-    }
-    final subtitleDirectoryBase = itemType == ItemType.anime
-        ? p.join(mangaMainDirectory.path, chapterName)
-        : chapterDirectory.path;
-    Map<String, String> videoHeader = {};
+    final chapterDirectory = (await storageProvider.getMangaChapterDirectory(
+      chapter,
+      mangaMainDirectory: mangaMainDirectory,
+    ))!;
+    await storageProvider.createDirectorySafely(chapterDirectory.path);
     Map<String, String> htmlHeader = {
       "Priority": "u=0, i",
       "User-Agent": ref.read(userAgentStateProvider),
     };
-    bool hasM3U8File = false;
-    bool nonM3U8File = false;
-    M3u8Downloader? m3u8Downloader;
-
     Future<void> exportCoverFromDownloadedPages() async {
       if (itemType != ItemType.manga) return;
       if (findMangaCoverFile(mangaMainDirectory) != null) return;
@@ -187,14 +176,6 @@ Future<void> downloadChapter(
         onlyIfMissing: true,
         fromPage: true,
       );
-    }
-
-    Future<void> deleteEmptyAnimeEpisodeDirectory() async {
-      if (itemType != ItemType.anime) return;
-      if (!await chapterDirectory.exists()) return;
-      if (await chapterDirectory.list().isEmpty) {
-        await chapterDirectory.delete();
-      }
     }
 
     Future<void> processConvert() async {
@@ -295,52 +276,6 @@ Future<void> downloadChapter(
           .catchError((Object e) {
             startFailure = "Failed to load chapter pages: $e";
           });
-    } else if (itemType == ItemType.anime) {
-      ref
-          .read(getVideoListProvider(episode: chapter).future)
-          .then((value) async {
-            final m3u8Urls = value.$1
-                .where(
-                  (element) =>
-                      element.originalUrl.endsWith(".m3u8") ||
-                      element.originalUrl.endsWith(".m3u"),
-                )
-                .toList();
-            final nonM3u8Urls = value.$1
-                .where((element) => element.originalUrl.isMediaVideo())
-                .toList();
-            nonM3U8File = nonM3u8Urls.isNotEmpty;
-            hasM3U8File = nonM3U8File ? false : m3u8Urls.isNotEmpty;
-            final videosUrls = nonM3U8File ? nonM3u8Urls : m3u8Urls;
-            if (videosUrls.isNotEmpty) {
-              subtitles = videosUrls.first.subtitles;
-              if (hasM3U8File) {
-                m3u8Downloader = M3u8Downloader(
-                  m3u8Url: videosUrls.first.url,
-                  downloadDir: chapterDirectory.path,
-                  headers: videosUrls.first.headers ?? {},
-                  subtitles: subtitles,
-                  subDownloadDir: subtitleDirectoryBase,
-                  fileName: p.join(mangaMainDirectory.path, "$chapterName.mp4"),
-                  chapter: chapter,
-                );
-              } else {
-                pageUrls = [PageUrl(videosUrls.first.url)];
-              }
-              videoHeader.addAll(videosUrls.first.headers ?? {});
-              isOk = true;
-            } else {
-              // Got a video list but nothing matched .m3u8/.m3u or a known video
-              // extension — record why instead of spinning forever below.
-              startFailure = value.$1.isEmpty
-                  ? "No videos returned by the source"
-                  : "No downloadable URL among ${value.$1.length} video(s) "
-                        "(none matched .m3u8/.m3u or a known extension)";
-            }
-          })
-          .catchError((Object e) {
-            startFailure = "Failed to load the video list: $e";
-          });
     } else if (itemType == ItemType.novel && chapter.url != null) {
       final manga = chapter.manga.value!;
       final source = getSource(
@@ -366,7 +301,7 @@ Future<void> downloadChapter(
       isOk = true;
     }
 
-    // Wait for the source to resolve pages/video — but never forever. Bail on
+    // Wait for the source to resolve pages/content — but never forever. Bail on
     // a recorded failure or after a timeout so a bad/unmatched URL surfaces an
     // error instead of a silent, endless stall.
     final startDeadline = DateTime.now().add(const Duration(seconds: 45));
@@ -405,7 +340,6 @@ Future<void> downloadChapter(
       final downloadRecord = downloadRepository.getById(chapter.id!);
       if (!(downloadRecord?.isDownload ?? false)) {
         for (final leftover in [
-          File(p.join(mangaMainDirectory.path, "$chapterName.mp4")),
           File(p.join(mangaMainDirectory.path, "$chapterName.html")),
         ]) {
           if (leftover.existsSync()) {
@@ -421,15 +355,7 @@ Future<void> downloadChapter(
               await File(p.join(mangaMainDirectory.path, "$chapterName.cbz"))
                   .exists()) &&
           ref.read(saveAsCBZArchiveStateProvider);
-      bool mp4FileExist = await File(
-        p.join(mangaMainDirectory.path, "$chapterName.mp4"),
-      ).exists();
-      bool htmlFileExist = await File(
-        p.join(mangaMainDirectory.path, "$chapterName.html"),
-      ).exists();
-      if (!cbzFileExist && itemType == ItemType.manga ||
-          !mp4FileExist && itemType == ItemType.anime ||
-          !htmlFileExist && itemType == ItemType.novel) {
+      if (!cbzFileExist && itemType == ItemType.manga) {
         final mainDirectory = (await storageProvider.getDirectory())!;
         await storageProvider.createDirectorySafely(mainDirectory.path);
         for (var index = 0; index < pageUrls.length; index++) {
@@ -449,8 +375,6 @@ Future<void> downloadChapter(
                     sourceId: manga.sourceId,
                   ),
                 )
-              : itemType == ItemType.anime
-              ? videoHeader
               : htmlHeader;
           if (cookie.isNotEmpty) {
             final userAgent = ref.read(userAgentStateProvider);
@@ -476,19 +400,6 @@ Future<void> downloadChapter(
                 ),
               );
             }
-          } else if (itemType == ItemType.anime) {
-            final file = File(
-              p.join(mangaMainDirectory.path, "$chapterName.mp4"),
-            );
-            if (!file.existsSync()) {
-              pages.add(
-                PageUrl(
-                  page.url.trim(),
-                  headers: pageHeaders,
-                  fileName: p.join(mangaMainDirectory.path, "$chapterName.mp4"),
-                ),
-              );
-            }
           }
         }
       }
@@ -502,8 +413,8 @@ Future<void> downloadChapter(
         await MDownloader(
           chapter: chapter,
           pageUrls: pages,
-          subtitles: subtitles,
-          subDownloadDir: subtitleDirectoryBase,
+          subtitles: null,
+          subDownloadDir: null,
         ).download((progress) {
           progressWrites = progressWrites.then((_) => setProgress(progress));
         });
@@ -536,16 +447,10 @@ Future<void> downloadChapter(
       } else {
         await setProgress(DownloadProgress(1, 1, itemType, isCompleted: true));
       }
-    } else if (hasM3U8File) {
-      await m3u8Downloader?.download((progress) {
-        progressWrites = progressWrites.then((_) => setProgress(progress));
-      });
-      await progressWrites;
     }
     if (callback != null) {
       callback();
     }
-    await deleteEmptyAnimeEpisodeDirectory();
     // Not awaited: the series' own cover may take its time, and the source's
     // slot is released below whatever it does.
     unawaited(
