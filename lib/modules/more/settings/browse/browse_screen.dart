@@ -11,7 +11,6 @@ import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/modules/more/settings/browse/providers/browse_state_provider.dart';
 import 'package:mangayomi/modules/browse/widgets/extension_server_warning_banner.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
-import 'package:mangayomi/providers/reader_state_provider.dart';
 
 class BrowseSScreen extends ConsumerWidget {
   const BrowseSScreen({super.key});
@@ -27,7 +26,6 @@ class BrowseSScreen extends ConsumerWidget {
     );
     final autoUpdateExtensions = ref.watch(autoUpdateExtensionsStateProvider);
     final developerMode = ref.watch(developerModeStateProvider);
-    final hideItems = ref.watch(hideItemsStateProvider);
     final l10n = context.l10n;
     ShioriSettingRow repo(String title, String subtitle, ItemType type) =>
         ShioriSettingRow(
@@ -56,24 +54,11 @@ class BrowseSScreen extends ConsumerWidget {
                   trailing: const Icon(Symbols.chevron_forward_rounded),
                   onTap: () => context.push('/extensionServer'),
                 ),
-              if (!hideItems.contains("/MangaLibrary"))
-                repo(
-                  l10n.manga_extensions_repo,
-                  l10n.manage_manga_repo_urls,
-                  ItemType.manga,
-                ),
-              if (!hideItems.contains("/AnimeLibrary"))
-                repo(
-                  l10n.anime_extensions_repo,
-                  l10n.manage_anime_repo_urls,
-                  ItemType.anime,
-                ),
-              if (!hideItems.contains("/NovelLibrary"))
-                repo(
-                  l10n.novel_extensions_repo,
-                  l10n.manage_novel_repo_urls,
-                  ItemType.novel,
-                ),
+              repo(
+                l10n.novel_extensions_repo,
+                l10n.manage_novel_repo_urls,
+                ItemType.novel,
+              ),
               ShioriSwitchRow(
                 title: l10n.check_for_extension_updates,
                 value: checkForExtensionUpdates,

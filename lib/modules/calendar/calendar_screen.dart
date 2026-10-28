@@ -40,7 +40,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void initState() {
     super.initState();
     _visibleTypes = hiddenItemTypes(ref.read(hideItemsStateProvider));
-    final initialItemType = widget.itemType ?? ItemType.manga;
+    final initialItemType = widget.itemType ?? ItemType.novel;
     if (_visibleTypes.contains(initialItemType)) {
       itemType = initialItemType;
     } else {
