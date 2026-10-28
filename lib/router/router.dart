@@ -28,11 +28,6 @@ import 'package:mangayomi/modules/more/data_and_storage/create_backup.dart';
 import 'package:mangayomi/modules/more/data_and_storage/data_and_storage.dart';
 import 'package:mangayomi/modules/more/settings/appearance/custom_navigation_settings.dart';
 import 'package:mangayomi/modules/more/settings/browse/source_repositories.dart';
-import 'package:mangayomi/modules/more/settings/player/custom_button_screen.dart';
-import 'package:mangayomi/modules/more/settings/player/player_advanced_screen.dart';
-import 'package:mangayomi/modules/more/settings/player/player_audio_screen.dart';
-import 'package:mangayomi/modules/more/settings/player/player_decoder_screen.dart';
-import 'package:mangayomi/modules/more/settings/player/player_overview_screen.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/modules/more/statistics/statistics_screen.dart';
 import 'package:mangayomi/modules/novel/novel_reader_view.dart';
@@ -40,7 +35,6 @@ import 'package:mangayomi/modules/tracker_library/tracker_library_screen.dart';
 import 'package:mangayomi/modules/updates/updates_screen.dart';
 import 'package:mangayomi/modules/more/categories/categories_screen.dart';
 import 'package:mangayomi/modules/more/settings/downloads/downloads_screen.dart';
-import 'package:mangayomi/modules/more/settings/player/player_screen.dart';
 import 'package:mangayomi/modules/more/settings/sync/sync.dart';
 import 'package:mangayomi/modules/more/settings/track/track.dart';
 import 'package:mangayomi/modules/more/settings/track/manage_trackers/manage_trackers.dart';
@@ -295,8 +289,6 @@ class RouterNotifier extends ChangeNotifier {
       name: "trackingDetail",
       builder: (trackerPref) => TrackingDetail(trackerPref: trackerPref),
     ),
-    _genericRoute(name: "playerOverview", child: const PlayerOverviewScreen()),
-    _genericRoute(name: "playerMode", child: const PlayerScreen()),
     _genericRoute(
       name: "keyboardShortcuts",
       child: const KeyboardShortcutsScreen(),
@@ -313,19 +305,6 @@ class RouterNotifier extends ChangeNotifier {
     _genericRoute(
       name: "customNavigationSettings",
       child: const CustomNavigationSettings(),
-    ),
-    _genericRoute(
-      name: "customButtonScreen",
-      child: const CustomButtonScreen(),
-    ),
-    _genericRoute(
-      name: "playerDecoderScreen",
-      child: const PlayerDecoderScreen(),
-    ),
-    _genericRoute(name: "playerAudioScreen", child: const PlayerAudioScreen()),
-    _genericRoute(
-      name: "playerAdvancedScreen",
-      child: const PlayerAdvancedScreen(),
     ),
     _genericRoute<ItemType?>(
       name: "calendarScreen",
