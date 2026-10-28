@@ -13,21 +13,7 @@ import 'package:mangayomi/eval/model/document.dart';
 import 'package:mangayomi/eval/http_response_extensions.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/router/router.dart';
-import 'package:mangayomi/services/anime_extractors/dood_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/filemoon.dart';
-import 'package:mangayomi/services/anime_extractors/gogocdn_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/mp4upload_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/mytv_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/okru_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/sendvid_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/sibnet_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/streamlare_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/streamtape_extractor.dart';
 import 'package:mangayomi/models/video.dart';
-import 'package:mangayomi/services/anime_extractors/streamwish_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/vidbom_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/voe_extractor.dart';
-import 'package:mangayomi/services/anime_extractors/your_upload_extractor.dart';
 import 'package:mangayomi/utils/cryptoaes/crypto_aes.dart';
 import 'package:mangayomi/utils/cryptoaes/deobfuscator.dart';
 import 'package:mangayomi/utils/cryptoaes/js_unpacker.dart';
@@ -36,7 +22,6 @@ import 'package:mangayomi/utils/reg_exp_matcher.dart';
 import 'package:xpath_selector_html_parser/xpath_selector_html_parser.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:convert/convert.dart' show hex;
-import 'package:mangayomi/services/anime_extractors/quarkuc_extractor.dart';
 
 class WordSet {
   final List<String> words;
@@ -220,99 +205,10 @@ class MBridge {
     return regCustomMatcher(expression, source, group);
   }
 
-  static Future<List<Video>> gogoCdnExtractor(String url) async {
-    return await GogoCdnExtractor().videosFromUrl(url);
-  }
-
-  static Future<List<Video>> doodExtractor(String url, String? quality) async {
-    return await DoodExtractor().videosFromUrl(url, quality: quality);
-  }
-
-  static Future<List<Video>> streamWishExtractor(
-    String url,
-    String prefix,
-  ) async {
-    return await StreamWishExtractor().videosFromUrl(url, prefix);
-  }
-
-  static Future<List<Video>> filemoonExtractor(
-    String url,
-    String prefix,
-    String suffix,
-  ) async {
-    return await FilemoonExtractor().videosFromUrl(url, prefix, suffix);
-  }
-
   static Map<String, String> decodeHeaders(String? headers) =>
       headers == null ? {} : (jsonDecode(headers) as Map).toMapStringString!;
 
-  static Future<List<Video>> mp4UploadExtractor(
-    String url,
-    String? headers,
-    String prefix,
-    String suffix,
-  ) async {
-    return await Mp4uploadExtractor().videosFromUrl(
-      url,
-      decodeHeaders(headers),
-      prefix: prefix,
-      suffix: suffix,
-    );
-  }
-
-  static final Map<CloudDriveType, QuarkUcExtractor> _extractorCache = {};
   static final Set<String> _initializedLocales = {};
-
-  static QuarkUcExtractor _getExtractor(String cookie, CloudDriveType type) {
-    if (!_extractorCache.containsKey(type)) {
-      QuarkUcExtractor extractor = QuarkUcExtractor();
-      extractor.initCloudDrive(cookie, type);
-      _extractorCache[type] = extractor;
-    }
-    return _extractorCache[type]!;
-  }
-
-  static Future<List<Map<String, String>>> quarkFilesExtractor(
-    List<String> url,
-    String cookie,
-  ) async {
-    var quark = _getExtractor(cookie, CloudDriveType.quark);
-    return await quark.videoFilesFromUrl(url);
-  }
-
-  static Future<List<Video>> quarkVideosExtractor(
-    String url,
-    String cookie,
-  ) async {
-    var quark = _getExtractor(cookie, CloudDriveType.quark);
-    return await quark.videosFromUrl(url);
-  }
-
-  static Future<List<Map<String, String>>> ucFilesExtractor(
-    List<String> url,
-    String cookie,
-  ) async {
-    var uc = _getExtractor(cookie, CloudDriveType.uc);
-    return await uc.videoFilesFromUrl(url);
-  }
-
-  static Future<List<Video>> ucVideosExtractor(
-    String url,
-    String cookie,
-  ) async {
-    var uc = _getExtractor(cookie, CloudDriveType.uc);
-    return await uc.videosFromUrl(url);
-  }
-
-  static Future<List<Video>> streamTapeExtractor(
-    String url,
-    String? quality,
-  ) async {
-    return await StreamTapeExtractor().videosFromUrl(
-      url,
-      quality: quality ?? "StreamTape",
-    );
-  }
 
   //Utility to use substring
   static String substringAfter(String text, String pattern) {
@@ -677,61 +573,6 @@ class MBridge {
 
   static String deobfuscateJsPassword(String inputString) {
     return Deobfuscator.deobfuscateJsPassword(inputString);
-  }
-
-  static Future<List<Video>> sibnetExtractor(String url, String prefix) async {
-    return await SibnetExtractor().videosFromUrl(url, prefix: prefix);
-  }
-
-  static Future<List<Video>> sendVidExtractor(
-    String url,
-    String? headers,
-    String prefix,
-  ) async {
-    return await SendvidExtractor(decodeHeaders(headers))
-        .videosFromUrl(url, prefix: prefix);
-  }
-
-  static Future<List<Video>> myTvExtractor(String url) async {
-    return await MytvExtractor().videosFromUrl(url);
-  }
-
-  static Future<List<Video>> okruExtractor(String url) async {
-    return await OkruExtractor().videosFromUrl(url);
-  }
-
-  static Future<List<Video>> yourUploadExtractor(
-    String url,
-    String? headers,
-    String? name,
-    String prefix,
-  ) async {
-    return await YourUploadExtractor().videosFromUrl(
-      url,
-      decodeHeaders(headers),
-      prefix: prefix,
-      name: name ?? "YourUpload",
-    );
-  }
-
-  static Future<List<Video>> voeExtractor(String url, String? quality) async {
-    return await VoeExtractor().videosFromUrl(url, quality);
-  }
-
-  static Future<List<Video>> vidBomExtractor(String url) async {
-    return await VidBomExtractor().videosFromUrl(url);
-  }
-
-  static Future<List<Video>> streamlareExtractor(
-    String url,
-    String prefix,
-    String suffix,
-  ) async {
-    return await StreamlareExtractor().videosFromUrl(
-      url,
-      prefix: prefix,
-      suffix: suffix,
-    );
   }
 
   static String encryptAESCryptoJS(String plainText, String passphrase) {
