@@ -23,7 +23,6 @@ import 'package:mangayomi/modules/manga/detail/widgets/migrate_screen.dart';
 import 'package:mangayomi/modules/mass_migration/mass_migration_source_selection_screen.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/recommendation_screen.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/related_screen.dart';
-import 'package:mangayomi/modules/manga/detail/widgets/watch_order_screen.dart';
 import 'package:mangayomi/modules/more/data_and_storage/create_backup.dart';
 import 'package:mangayomi/modules/more/data_and_storage/data_and_storage.dart';
 import 'package:mangayomi/modules/more/settings/appearance/custom_navigation_settings.dart';
@@ -330,10 +329,6 @@ class RouterNotifier extends ChangeNotifier {
       name: "recommendations",
       builder: (data) =>
           RecommendationScreen(media: data.$1, algorithmWeights: data.$2),
-    ),
-    _genericRoute<(MediaLookupContext, Track?)>(
-      name: "watchOrder",
-      builder: (data) => WatchOrderScreen(media: data.$1, track: data.$2),
     ),
   ];
 

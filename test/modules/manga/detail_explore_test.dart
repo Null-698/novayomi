@@ -24,16 +24,6 @@ void main() {
           'Related titles',
           'Its adaptations, spin-offs and other versions',
         ),
-        (
-          Symbols.format_list_numbered_rounded,
-          'Watch order',
-          'The order to watch the whole story in',
-        ),
-        (
-          Symbols.playlist_play_rounded,
-          'Sequels',
-          'What comes after, from your tracker',
-        ),
       ])
         DetailExploreAction(
           icon: icon,
@@ -75,7 +65,7 @@ void main() {
   testWidgets('each place is a row that says what is there', (tester) async {
     await open(tester);
     expect(tester.takeException(), isNull);
-    expect(find.byType(ShioriSettingRow), findsNWidgets(4));
+    expect(find.byType(ShioriSettingRow), findsNWidgets(2));
     expect(
       find.text('Its adaptations, spin-offs and other versions'),
       findsOneWidget,
