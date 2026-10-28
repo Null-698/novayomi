@@ -13,7 +13,6 @@ import 'package:mangayomi/modules/more/settings/appearance/providers/pure_black_
 import 'package:mangayomi/modules/more/settings/appearance/widgets/blend_level_slider.dart';
 import 'package:mangayomi/modules/more/settings/appearance/widgets/dark_mode_button.dart';
 import 'package:mangayomi/modules/more/settings/appearance/widgets/theme_selector.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
 import 'package:mangayomi/l10n/generated/app_localizations.dart';
 import 'package:mangayomi/utils/language.dart';
@@ -142,15 +141,6 @@ class AppearanceScreen extends ConsumerWidget {
                 trailing: const Icon(Symbols.chevron_forward_rounded),
                 onTap: () => context.push("/customNavigationSettings"),
               ),
-              if (isTv)
-                ShioriSwitchRow(
-                  icon: Symbols.grid_view_rounded,
-                  title: l10n.tv_home_beta,
-                  subtitle: l10n.tv_home_beta_subtitle,
-                  value: ref.watch(tvHomeStyleProvider),
-                  onChanged: (v) =>
-                      ref.read(tvHomeStyleProvider.notifier).set(v),
-                ),
             ],
           ),
           ShioriSettingsGroup(

@@ -11,7 +11,6 @@ import 'package:mangayomi/modules/manga/detail/chapter_bulk_actions.dart';
 import 'package:mangayomi/modules/manga/detail/detail_overflow_actions.dart';
 import 'package:mangayomi/modules/manga/detail/providers/isar_providers.dart';
 import 'package:mangayomi/modules/manga/detail/providers/state_providers.dart';
-import 'package:mangayomi/modules/manga/detail/tv/tv_anime_detail_view.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/chapter_filter_sort_bottom_sheet.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/detail_app_bar.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/detail_banner.dart';
@@ -129,11 +128,6 @@ class _MangaDetailViewState extends ConsumerState<MangaDetailView>
 
   @override
   Widget build(BuildContext context) {
-    // On Android TV, anime gets a dedicated d-pad split detail (info left,
-    // episodes right). Manga/novel and phones/desktop keep the classic detail.
-    if (isTv && widget.itemType == ItemType.anime) {
-      return TvAnimeDetailView(manga: widget.manga!);
-    }
     // Watch all sort/filter providers so the list rebuilds whenever
     // the user changes settings in _showDraggableMenu().
     ref.watch(scanlatorsFilterStateProvider(widget.manga!));

@@ -160,12 +160,6 @@ final settingsIndex = <SettingsEntry>[
     route: '/appearance',
   ),
   SettingsEntry(
-    title: (l) => l.tv_home_beta,
-    subtitle: null,
-    section: (l) => l.appearance,
-    route: '/appearance',
-  ),
-  SettingsEntry(
     title: (l) => l.app_ui_scale,
     subtitle: (l) => l.app_ui_scale_subtitle,
     section: (l) => l.appearance,

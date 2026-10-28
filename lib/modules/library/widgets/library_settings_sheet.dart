@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/library/providers/library_state_provider.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/library/providers/library_source_badge_provider.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/chapter_filter_list_tile_widget.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/chapter_sort_list_tile_widget.dart';
@@ -493,24 +492,6 @@ class _DisplayTab extends ConsumerWidget {
             ),
           ),
 
-          // TV home section - only the anime home has these rows.
-          if (isTv && itemType == ItemType.anime) ...[
-            _SectionLabel(context.l10n.tv_home_rows),
-            Padding(
-              padding: const EdgeInsets.only(top: ShioriSpace.s4),
-              child: Column(
-                children: [
-                  ListTileChapterFilter(
-                    label: context.l10n.genre_rows,
-                    type: ref.watch(tvHomeGenreRowsProvider) ? 1 : 0,
-                    onTap: () => ref
-                        .read(tvHomeGenreRowsProvider.notifier)
-                        .set(!ref.read(tvHomeGenreRowsProvider)),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
