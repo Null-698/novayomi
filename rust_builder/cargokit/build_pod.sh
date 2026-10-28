@@ -25,8 +25,11 @@ export CARGOKIT_CONFIGURATION=$CONFIGURATION
 # Path to directory containing Cargo.toml.
 export CARGOKIT_MANIFEST_DIR=$PODS_TARGET_SRCROOT/$1
 
-# Temporary directory for build artifacts.
-export CARGOKIT_TARGET_TEMP_DIR=$TARGET_TEMP_DIR
+# Cargo's target directory must match the rust/target directory cached by
+# Swatinem/rust-cache. Using Xcode's TARGET_TEMP_DIR here previously forced a
+# full Rust rebuild for each ephemeral GitHub Actions runner, even on cache hits.
+# Cargo already separates target triples and debug/release profiles.
+export CARGOKIT_TARGET_TEMP_DIR="$CARGOKIT_MANIFEST_DIR/target"
 
 # Output directory for final artifacts.
 export CARGOKIT_OUTPUT_DIR=$PODS_CONFIGURATION_BUILD_DIR/$PRODUCT_NAME

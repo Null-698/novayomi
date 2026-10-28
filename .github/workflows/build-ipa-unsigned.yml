@@ -27,7 +27,8 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-          architecture: x64
+          architecture: arm64
+          cache: true
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -38,6 +39,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust
+          prefix-key: "v1-novayomi-rust"
+          cache-workspace-crates: true
           cache-on-failure: true
 
       - name: Print Xcode version

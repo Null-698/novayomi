@@ -51,7 +51,6 @@ import 'package:mangayomi/modules/library/providers/file_scanner.dart';
 import 'package:mangayomi/utils/app_lock.dart';
 import 'package:mangayomi/services/secure_screen.dart';
 import 'package:mangayomi/modules/manga/download/providers/download_provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mangayomi/services/background_work/background_work.dart';
 import 'package:mangayomi/services/background_work/download_work.dart';
 import 'package:mangayomi/repositories/chapter_repository.dart';
@@ -151,7 +150,6 @@ void main(List<String> args) async {
       }
       // The background work notification's buttons reach the app through
       // this port.
-      if (Platform.isAndroid) FlutterForegroundTask.initCommunicationPort();
       runApp(
         startupError != null
             ? _StartupErrorApp(error: startupError.toString())
@@ -502,7 +500,6 @@ class _MyAppState extends ConsumerState<MyApp>
   /// what its buttons do.
   void _initBackgroundWork() {
     DownloadWork.instance.start();
-    FlutterForegroundTask.addTaskDataCallback(BackgroundWork.handleAction);
     BackgroundWork.onAction = (action) {
       switch (action) {
         case 'stop_library_update':
@@ -518,7 +515,6 @@ class _MyAppState extends ConsumerState<MyApp>
   @override
   void dispose() {
     DownloadWork.instance.dispose();
-    FlutterForegroundTask.removeTaskDataCallback(BackgroundWork.handleAction);
     WidgetsBinding.instance.removeObserver(this);
     if (!isMobile) {
       windowManager.removeListener(this);
