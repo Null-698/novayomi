@@ -58,6 +58,7 @@ import 'package:mangayomi/services/background_work/background_work.dart';
 import 'package:mangayomi/services/background_work/download_work.dart';
 import 'package:mangayomi/repositories/chapter_repository.dart';
 import 'package:mangayomi/utils/extensions/chapter_extensions.dart';
+import 'package:mangayomi/utils/novel_tracking.dart';
 import 'package:mangayomi/services/download_manager/download_gate.dart';
 import 'package:mangayomi/modules/more/settings/security/providers/security_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/security/app_lock_screen.dart';
@@ -805,6 +806,9 @@ class _MyAppState extends ConsumerState<MyApp>
   Future<void> _checkTrackerRefresh() async {
     final prefs = await trackRepository.getAllPreferencesWithSyncId();
     for (final pref in prefs) {
+      // Keep old TV tracker accounts in Isar/backups without contacting APIs
+      // that are no longer supported by this novels-only application.
+      if (!isSupportedNovelTracker(pref.syncId)) continue;
       final temp = track.Track(
         syncId: pref.syncId,
         status: track.TrackStatus.completed,
