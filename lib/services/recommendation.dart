@@ -1,98 +1,41 @@
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/services/anilist_discovery.dart';
-import 'package:mangayomi/services/discovery/media_catalog_resolver.dart';
 import 'package:mangayomi/services/discovery/media_lookup_context.dart';
 import 'package:mangayomi/services/discovery/search_target.dart';
-import 'package:mangayomi/services/discovery/trakt_discovery.dart';
 import 'package:mangayomi/utils/extensions/string_extensions.dart';
 
-/// Recommendations for the title represented by [media].
+/// Novel recommendations from AniList. Keep the shared result representation
+/// because the novel recommendation screen also uses its rating and search data.
 ///
-/// Anime, manga and novels keep the existing AniList behavior. Mixed video
-/// catalogs require an exact AniList title, year, and format match before they
-/// use anime discovery; a clean miss uses Trakt. Provider failures still
-/// surface instead of silently reclassifying the title.
-///
-/// Errors propagate so the screen can show the provider's real failure instead
-/// of pretending that an unavailable service found no matches.
-///
-/// [algorithmWeights] is retained for call-site compatibility. Neither AniList
-/// nor Trakt exposes compatible weighting controls, so it is unused.
+/// Errors propagate to the screen so users can retry a failed request.
+/// [algorithmWeights] is retained for existing settings/callers.
 Future<List<RecommendationResult>> getRecommendations(
   MediaLookupContext media,
-  AlgorithmWeights algorithmWeights, {
-  TraktDiscovery? trakt,
-  MediaCatalogResolver? catalogResolver,
-}) async {
-  final discovery = trakt ?? TraktDiscovery();
-  final resolved =
-      await (catalogResolver ?? MediaCatalogResolver(trakt: discovery)).resolve(
-        media,
-      );
-  if (resolved.catalog == DiscoveryCatalog.trakt) {
-    final traktType = _traktType(media.kind);
-    if (traktType == null) return const [];
-    final root =
-        resolved.traktRoot ??
-        await _resolveTraktRoot(media, discovery, traktType);
-    if (root == null) return const [];
-    final recommendations = await discovery.fetchRecommendations(root);
-    return recommendations
-        .map(RecommendationResult.fromTrakt)
-        .toList(growable: false);
-  }
+  AlgorithmWeights algorithmWeights,
+) async {
+  // All new UI paths are novel-only, and older non-novel records are ignored.
+  if (media.itemType != ItemType.novel) return const [];
 
-  final mediaId =
-      resolved.anilistId ?? await searchMediaId(media.itemType, media.title);
+  final mediaId = media.anilistId ??
+      await searchMediaId(ItemType.novel, media.title);
   if (mediaId == null) return const [];
   final recommendations = await fetchRecommendations(mediaId);
   return recommendations
       .map(
         (recommendation) => RecommendationResult.fromDiscovery(
           recommendation,
-          itemType: media.itemType,
+          itemType: ItemType.novel,
         ),
       )
       .toList(growable: false);
 }
 
-Future<TraktRootMedia?> _resolveTraktRoot(
-  MediaLookupContext media,
-  TraktDiscovery discovery,
-  TraktMediaType type,
-) async {
-  if (media.tmdbId case final int tmdbId) {
-    final exact = await discovery.resolveByTmdbId(tmdbId: tmdbId, type: type);
-    if (exact != null) return exact;
-  }
-  if (media.traktId case final int traktId) {
-    final exact = await discovery.resolveByTraktId(
-      traktId: traktId,
-      type: type,
-    );
-    if (exact != null) return exact;
-  }
-  if (media.title.trim().isEmpty) return null;
-  return discovery.resolveByTitle(
-    title: media.title,
-    year: media.year,
-    type: type,
-  );
-}
-
-TraktMediaType? _traktType(MediaKind kind) => switch (kind) {
-  MediaKind.movie => TraktMediaType.movie,
-  MediaKind.show => TraktMediaType.show,
-  MediaKind.unknown || MediaKind.anime => null,
-};
-
-enum RecommendationProvider { anilist, trakt }
+enum RecommendationProvider { anilist }
 
 /// A catalog rating and its scale.
 ///
-/// Neither AniList nor Trakt returns a similarity percentage. Keeping the
-/// provider scale prevents a Trakt 8.7/10 rating from being rendered as 8%.
+/// A catalog score is distinct from a similarity percentage.
 class CatalogRating {
   const CatalogRating({
     required this.value,
@@ -121,8 +64,6 @@ class RecommendationResult {
     required this.genres,
     this.anilistId,
     this.myanimelistId,
-    this.traktId,
-    this.tmdbId,
     this.year,
     this.rating,
     this.titleRomaji,
@@ -137,8 +78,6 @@ class RecommendationResult {
   final SearchTarget searchTarget;
   final int? anilistId;
   final int? myanimelistId;
-  final int? traktId;
-  final int? tmdbId;
   final int? year;
   final CatalogRating? rating;
   final String? titleRomaji;
@@ -177,31 +116,4 @@ class RecommendationResult {
     genres: media.genres,
   );
 
-  factory RecommendationResult.fromTrakt(TraktRecommendation result) {
-    final media = result.media;
-    final kind = media.type == TraktMediaType.movie
-        ? MediaKind.movie
-        : MediaKind.show;
-    return RecommendationResult(
-      id: media.stableKey,
-      provider: RecommendationProvider.trakt,
-      kind: kind,
-      searchTarget: SearchTarget(query: media.title, itemType: ItemType.anime),
-      traktId: media.ids.trakt,
-      tmdbId: media.ids.tmdb,
-      year: media.year,
-      rating: media.rating == null
-          ? null
-          : CatalogRating(
-              value: media.rating!,
-              maximum: 10,
-              provider: RecommendationProvider.trakt,
-            ),
-      titleEnglish: media.title,
-      titleNative: media.originalTitle,
-      description: media.overview,
-      imgURLs: media.posterUrl == null ? const [] : [media.posterUrl!],
-      genres: media.genres,
-    );
-  }
 }
