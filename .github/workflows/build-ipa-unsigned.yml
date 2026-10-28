@@ -33,7 +33,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios
+          targets: aarch64-apple-ios
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
