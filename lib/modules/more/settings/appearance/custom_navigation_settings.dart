@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mangayomi/l10n/generated/app_localizations.dart';
-import 'package:mangayomi/utils/platform_utils.dart';
 import 'package:shiori/shiori.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/modules/main_view/nav_groups.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/more/settings/appearance/appearance_screen.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
@@ -35,14 +33,6 @@ class _CustomNavigationSettingsState
         child: ReorderableListView.builder(
           header: ShioriSettingsGroup(
             children: [
-              if (isTv)
-                ShioriSwitchRow(
-                  title: l10n.anime_only_tv_layout,
-                  subtitle: l10n.anime_only_beta_subtitle,
-                  value: ref.watch(animeOnlyTvModeProvider),
-                  onChanged: (v) =>
-                      ref.read(animeOnlyTvModeProvider.notifier).set(v),
-                ),
               ShioriSwitchRow(
                 title: l10n.group_nav_destinations,
                 subtitle: l10n.group_nav_destinations_subtitle,

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mangayomi/l10n/generated/app_localizations.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/modules/library/widgets/base_library_tab_screen.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 
 List<String> _hidden = [];
@@ -18,11 +17,6 @@ class _FakeHideItems extends HideItemsState {
   void set(List<String> values) {
     state = values;
   }
-}
-
-class _FakeAnimeOnlyTvMode extends AnimeOnlyTvMode {
-  @override
-  bool build() => false;
 }
 
 class _TabsHost extends ConsumerStatefulWidget {
@@ -54,7 +48,6 @@ void main() {
       ProviderScope(
         overrides: [
           hideItemsStateProvider.overrideWith(_FakeHideItems.new),
-          animeOnlyTvModeProvider.overrideWith(_FakeAnimeOnlyTvMode.new),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,

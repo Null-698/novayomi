@@ -9,7 +9,6 @@ import 'package:mangayomi/modules/more/widgets/list_tile_widget.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
 import 'package:mangayomi/models/manga.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/repositories/chapter_repository.dart';
 import 'package:mangayomi/repositories/history_repository.dart';
 import 'package:mangayomi/repositories/manga_repository.dart';
@@ -96,20 +95,14 @@ class MoreScreenState extends ConsumerState<MoreScreen> {
                   icon: Symbols.calendar_month_rounded,
                   title: l10n.calendar,
                 ),
-                // Mass migration is otherwise only reachable from a series'
-                // overflow menu, which the TV detail view lacks. It is a
-                // library-wide tool (it lists every source in the library),
-                // seeded with anime since the TV build is anime-first; the TV
-                // detail's per-source shortcut covers the other libraries.
-                if (isTv)
-                  ListTileWidget(
-                    onTap: () => context.push(
-                      '/massMigration',
-                      extra: (ItemType.anime, null),
-                    ),
-                    icon: Symbols.swap_horiz_rounded,
-                    title: l10n.mass_migration_title,
+                ListTileWidget(
+                  onTap: () => context.push(
+                    '/massMigration',
+                    extra: (ItemType.novel, null),
                   ),
+                  icon: Symbols.swap_horiz_rounded,
+                  title: l10n.mass_migration_title,
+                ),
               ],
             ),
             ShioriSettingsGroup(
@@ -145,9 +138,7 @@ class MoreScreenState extends ConsumerState<MoreScreen> {
 final readingSummaryProvider = FutureProvider.autoDispose<(int, int, int)>((
   ref,
 ) async {
-  final types = ref.watch(animeOnlyTvModeProvider)
-      ? const [ItemType.anime]
-      : hiddenItemTypes(ref.watch(hideItemsStateProvider));
+  final types = hiddenItemTypes(ref.watch(hideItemsStateProvider));
   var series = 0, read = 0, seconds = 0;
   for (final type in types) {
     series += await mangaRepository.countFavoritesByItemType(type);

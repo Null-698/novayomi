@@ -9,7 +9,6 @@ import 'package:mangayomi/modules/more/statistics/statistics_provider.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/utils/item_type_filters.dart';
 import 'package:mangayomi/utils/item_type_localization.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -26,12 +25,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
   @override
   void initState() {
     super.initState();
-    // Anime-only TV layout shows just the anime tab. Force it rather than
-    // intersecting with hiddenItemTypes: the Anime library can be hidden from
-    // that list, which would leave us with no tabs at all.
-    _visibleTabTypes = ref.read(animeOnlyTvModeProvider)
-        ? const [ItemType.anime]
-        : hiddenItemTypes(ref.read(hideItemsStateProvider));
+    _visibleTabTypes = hiddenItemTypes(ref.read(hideItemsStateProvider));
     _tabController = TabController(
       length: _visibleTabTypes.length,
       vsync: this,

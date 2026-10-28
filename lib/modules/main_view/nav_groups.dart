@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/manga.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/repositories/settings_repository.dart';
 
@@ -106,18 +105,11 @@ final navGroupingProvider = NotifierProvider<NavGroupingState, bool>(
   NavGroupingState.new,
 );
 
-/// The destinations the user has visible, in their order: hidden items and
-/// the anime-only TV layout's dropped libraries removed.
+/// Destinations visible in the user's saved navigation order.
 final visibleNavDestinationsProvider = Provider<List<String>>((ref) {
   final order = ref.watch(navigationOrderStateProvider);
   final hidden = ref.watch(hideItemsStateProvider);
-  final animeOnly = ref.watch(animeOnlyTvModeProvider);
-  return order
-      .where((d) => !hidden.contains(d))
-      .where(
-        (d) => !animeOnly || (d != '/MangaLibrary' && d != '/NovelLibrary'),
-      )
-      .toList();
+  return order.where((d) => !hidden.contains(d)).toList();
 });
 
 /// The last member visited in each group, so a tap on the group returns

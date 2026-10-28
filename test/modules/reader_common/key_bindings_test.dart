@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mangayomi/modules/anime/utils/player_shortcuts.dart';
 import 'package:mangayomi/modules/reader_common/mixins/reader_gestures.dart';
 import 'package:mangayomi/modules/reader_common/key_bindings.dart';
 
@@ -12,14 +11,20 @@ void main() {
     expect(encodeKeyBindings(defaultKeyBindings), isEmpty);
     final saved = encodeKeyBindings({
       ...defaultKeyBindings,
-      PlayerShortcut.mute: [ctrlB],
+      ReaderShortcut.nextChapter: [ctrlB],
     });
-    expect(saved, ['player.mute=c+${LogicalKeyboardKey.keyB.keyId}']);
-    final read = resolveKeyBindings([...saved, 'garbage', 'reader.nope=1']);
-    expect(read[PlayerShortcut.mute], [ctrlB]);
+    expect(saved, ['reader.nextChapter=c+${LogicalKeyboardKey.keyB.keyId}']);
+    final read = resolveKeyBindings([
+      ...saved,
+      'player.mute=c+${LogicalKeyboardKey.keyB.keyId}',
+      'garbage',
+      'reader.nope=1',
+    ]);
+    expect(read[ReaderShortcut.nextChapter], [ctrlB]);
     expect(read[ReaderShortcut.toggleBars], [
       const KeyCombo(LogicalKeyboardKey.keyM),
     ]);
+    expect(read.keys, everyElement(isA<ReaderShortcut>()));
   });
 
   testWidgets('the reader follows a rebound key', (tester) async {
@@ -45,17 +50,8 @@ void main() {
     expect(calls, ['next chapter']);
   });
 
-  test('the lists show the rebound keys', () {
-    final bindings = {
-      ...defaultKeyBindings,
-      PlayerShortcut.mute: [ctrlB],
-    };
-    final keys = Map.fromEntries(
-      playerShortcutKeys(bindings: bindings).map((e) => MapEntry(e.$1, e.$2)),
-    );
-    expect(keys[PlayerShortcut.mute], ['Ctrl B']);
-    expect(keys[PlayerShortcut.showShortcuts], ['?', 'F1']);
-    final reader = readerShortcutKeys().map((e) => e.$2).toList();
-    expect(reader.first, ['←', '↑', '⇧ Space']);
+  test('reader shortcut labels preserve default key hints', () {
+    final labels = readerShortcutKeys().map((entry) => entry.$2).toList();
+    expect(labels.first, ['←', '↑', '⇧ Space']);
   });
 }

@@ -19,28 +19,6 @@ enum ReaderShortcut {
   showShortcuts,
 }
 
-/// What a video player shortcut does.
-enum PlayerShortcut {
-  playPause,
-  seekBackShort,
-  seekForwardShort,
-  seekBackLong,
-  seekForwardLong,
-  skipIntro,
-  previousFrame,
-  nextFrame,
-  volumeUp,
-  volumeDown,
-  mute,
-  previousEpisode,
-  nextEpisode,
-  fullScreen,
-  exitFullScreen,
-  shaders,
-  shadersOff,
-  showShortcuts,
-}
-
 /// A key plus the modifiers held with it, e.g. Ctrl + B.
 class KeyCombo {
   final LogicalKeyboardKey key;
@@ -151,10 +129,8 @@ class KeyCombo {
   int get hashCode => Object.hash(key, control, shift, alt, meta);
 }
 
-/// The keys of every shortcut that can be rebound, by [ReaderShortcut] or
-/// [PlayerShortcut]. The list of shortcuts itself (? and F1), the frame
-/// steps (typed by character, so they hold on any layout), the Anime4K
-/// keys and the media keys stay fixed.
+/// Key bindings for the novel reader. Older `player.*` values in saved
+/// settings are ignored without modifying the user's existing novel bindings.
 typedef KeyBindings = Map<Enum, List<KeyCombo>>;
 
 const defaultKeyBindings = <Enum, List<KeyCombo>>{
@@ -198,36 +174,14 @@ const defaultKeyBindings = <Enum, List<KeyCombo>>{
     KeyCombo(LogicalKeyboardKey.escape),
     KeyCombo(LogicalKeyboardKey.backspace),
   ],
-  PlayerShortcut.playPause: [
-    KeyCombo(LogicalKeyboardKey.space),
-    KeyCombo(LogicalKeyboardKey.keyK),
-  ],
-  PlayerShortcut.seekBackShort: [KeyCombo(LogicalKeyboardKey.arrowLeft)],
-  PlayerShortcut.seekForwardShort: [KeyCombo(LogicalKeyboardKey.arrowRight)],
-  PlayerShortcut.seekBackLong: [KeyCombo(LogicalKeyboardKey.keyJ)],
-  PlayerShortcut.seekForwardLong: [KeyCombo(LogicalKeyboardKey.keyL)],
-  PlayerShortcut.skipIntro: [
-    KeyCombo(LogicalKeyboardKey.keyS),
-    KeyCombo(LogicalKeyboardKey.enter),
-  ],
-  PlayerShortcut.volumeUp: [KeyCombo(LogicalKeyboardKey.arrowUp)],
-  PlayerShortcut.volumeDown: [KeyCombo(LogicalKeyboardKey.arrowDown)],
-  PlayerShortcut.mute: [KeyCombo(LogicalKeyboardKey.keyM)],
-  PlayerShortcut.previousEpisode: [KeyCombo(LogicalKeyboardKey.keyP)],
-  PlayerShortcut.nextEpisode: [KeyCombo(LogicalKeyboardKey.keyN)],
-  PlayerShortcut.fullScreen: [
-    KeyCombo(LogicalKeyboardKey.keyF),
-    KeyCombo(LogicalKeyboardKey.f11),
-  ],
-  PlayerShortcut.exitFullScreen: [KeyCombo(LogicalKeyboardKey.escape)],
 };
 
 /// The key caps of [keys], one per sign: the three plus keys read as one +.
 List<String> keyLabels(Iterable<KeyCombo> keys) =>
     keys.map((k) => k.label).toSet().toList();
 
-/// The shortcut [combo] triggers, if any; with [sameKindAs], only among the
-/// reader's or the player's, whichever that one is.
+/// The novel-reader shortcut triggered by [combo]. [sameKindAs] is kept for
+/// callers that filter shortcut conflicts while rebinding.
 Enum? shortcutFor(KeyBindings bindings, KeyCombo combo, {Enum? sameKindAs}) {
   for (final MapEntry(key: action, value: keys) in bindings.entries) {
     if (sameKindAs != null && action.runtimeType != sameKindAs.runtimeType) {
@@ -238,10 +192,8 @@ Enum? shortcutFor(KeyBindings bindings, KeyCombo combo, {Enum? sameKindAs}) {
   return null;
 }
 
-/// Saved entries look like `player.previousEpisode=c+98` (Ctrl + B); the
-/// prefix keeps the reader's and the player's names apart.
-String _id(Enum action) =>
-    '${action is ReaderShortcut ? 'reader' : 'player'}.${action.name}';
+/// Reader bindings are saved as `reader.nextChapter=c+98` (Ctrl + B).
+String _id(Enum action) => 'reader.${action.name}';
 
 /// The keys for every shortcut: the saved ones where the user changed them,
 /// the defaults everywhere else.

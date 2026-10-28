@@ -6,7 +6,6 @@ import 'package:mangayomi/modules/main_view/nav_actions.dart';
 import 'package:mangayomi/modules/main_view/nav_groups.dart';
 import 'package:mangayomi/modules/main_view/nav_shrink.dart';
 import 'package:mangayomi/modules/main_view/providers/migration.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/main_view/widgets/mobile_bottom_navigation.dart';
 import 'package:mangayomi/modules/main_view/widgets/mode_bars.dart';
 import 'package:mangayomi/modules/main_view/widgets/nav_destination_builders.dart';
@@ -59,12 +58,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
     _navigationOrder = ref.read(navigationOrderStateProvider);
     final hiddenItems = ref.read(hideItemsStateProvider);
 
-    // On the anime-only TV layout, never land on a hidden manga/novel library.
-    final order = ref.read(animeOnlyTvModeProvider)
-        ? _navigationOrder.where(isNotHiddenLibOnTv).toList()
-        : _navigationOrder;
-    final visible = order.where((e) => !hiddenItems.contains(e)).toList();
-    _defaultLocation = visible.isNotEmpty ? visible.first : "/NovelLibrary";
+    final visible = _navigationOrder
+        .where((e) => !hiddenItems.contains(e))
+        .toList();
+    _defaultLocation = visible.contains("/NovelLibrary")
+        ? "/NovelLibrary"
+        : visible.isNotEmpty
+        ? visible.first
+        : "/NovelLibrary";
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -83,10 +84,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   /// The first library the user actually has visible, in their own nav order.
   String? _firstVisibleLibrary() {
     final hidden = ref.read(hideItemsStateProvider);
-    final order = ref.read(animeOnlyTvModeProvider)
-        ? _navigationOrder.where(isNotHiddenLibOnTv)
-        : _navigationOrder;
-    for (final nav in order) {
+    for (final nav in _navigationOrder) {
       if (libLocationRegex.hasMatch(nav) && !hidden.contains(nav)) return nav;
     }
     return null;
@@ -178,11 +176,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
                   : navigationOrder
                         .where((nav) => !hideItems.contains(nav))
                         .toList();
-
-              // Anime-only TV layout: drop the manga & novel library tabs.
-              if (ref.watch(animeOnlyTvModeProvider)) {
-                dest = dest.where(isNotHiddenLibOnTv).toList();
-              }
 
               if (grouped) {
                 dest = groupDestinations(dest);

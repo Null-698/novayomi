@@ -5,7 +5,6 @@ import 'package:mangayomi/modules/widgets/collapsing_header.dart';
 import 'package:shiori/shiori.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/manga.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/library/widgets/search_text_form_field.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/modules/widgets/tv_pill.dart';
@@ -58,28 +57,11 @@ abstract class BaseLibraryTabScreenState<T extends ConsumerStatefulWidget>
         hideItemsStateProvider,
         (_, _) => _applyVisibleTabTypes(),
       ),
-      ref.listenManual(
-        animeOnlyTvModeProvider,
-        (_, _) => _applyVisibleTabTypes(),
-      ),
     ];
   }
 
-  List<ItemType> _computeVisibleTabTypes([
-    List<String>? hideItems,
-    bool? animeOnly,
-  ]) {
-    final types = hiddenItemTypes(
-      hideItems ?? ref.read(hideItemsStateProvider),
-    );
-
-    // Anime-only layout: only the anime tab (hides manga/novel in History,
-    // Updates, and any other screen built on this base).
-    if (animeOnly ?? ref.read(animeOnlyTvModeProvider)) {
-      return types.where((t) => t == ItemType.anime).toList();
-    }
-    return types;
-  }
+  List<ItemType> _computeVisibleTabTypes([List<String>? hideItems]) =>
+      hiddenItemTypes(hideItems ?? ref.read(hideItemsStateProvider));
 
   TabController _newTabController(int initialIndex) {
     final controller = TabController(
@@ -210,10 +192,7 @@ abstract class BaseLibraryTabScreenState<T extends ConsumerStatefulWidget>
   @override
   Widget build(BuildContext context) {
     _applyVisibleTabTypes(
-      _computeVisibleTabTypes(
-        ref.watch(hideItemsStateProvider),
-        ref.watch(animeOnlyTvModeProvider),
-      ),
+      _computeVisibleTabTypes(ref.watch(hideItemsStateProvider)),
     );
     if (visibleTabTypes.isEmpty) {
       return const SizedBox.shrink();

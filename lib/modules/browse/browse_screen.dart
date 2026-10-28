@@ -8,14 +8,12 @@ import 'package:go_router/go_router.dart';
 import 'package:mangayomi/l10n/generated/app_localizations.dart';
 import 'package:mangayomi/repositories/source_repository.dart';
 import 'package:mangayomi/models/manga.dart';
-import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/providers/storage_provider.dart';
 import 'package:mangayomi/modules/browse/extension/extension_screen.dart';
 import 'package:mangayomi/modules/browse/sources/sources_screen.dart';
 import 'package:mangayomi/modules/widgets/entry_badge_chip.dart';
 import 'package:mangayomi/modules/widgets/tv_row_button.dart';
-import 'package:mangayomi/modules/main_view/providers/tv_mode_provider.dart';
 import 'package:mangayomi/modules/library/widgets/search_text_form_field.dart';
 import 'package:mangayomi/services/fetch_sources_list.dart';
 import 'package:mangayomi/utils/item_type_localization.dart';
@@ -70,11 +68,8 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     vsync: this,
   );
 
-  // Hide manga & novel from Browse (sources + extensions) on the anime-only TV
-  // layout so only anime shows, and respect media types hidden in Settings.
-  // Recomputed live so toggling "Anime only" or hiding a media type updates
-  // the tabs without a restart. Defaults to isTv, user-overridable. See #729.
-  List<BrowseTab> _computeTabList(bool animeOnly, List<String> hideItems) =>
+  // Novel source and extension tabs remain visible on every device.
+  List<BrowseTab> _computeTabList() =>
       const [
         BrowseTab(ItemType.novel, BrowseTabKind.sources),
         BrowseTab(ItemType.novel, BrowseTabKind.extensions),
@@ -83,10 +78,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
   @override
   void initState() {
     super.initState();
-    _tabList = _computeTabList(
-      ref.read(animeOnlyTvModeProvider),
-      ref.read(hideItemsStateProvider),
-    );
+    _tabList = _computeTabList();
     _tabBarController = TabController(
       length: _tabList.length,
       initialIndex: _takeRequestedTabIndex(),
@@ -379,12 +371,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Recompute the tab list live when "Anime only" or hidden media types
-    // change; recreate the controller when the visible tabs change.
-    final newTabs = _computeTabList(
-      ref.watch(animeOnlyTvModeProvider),
-      ref.watch(hideItemsStateProvider),
-    );
+    final newTabs = _computeTabList();
     if (!listEquals(newTabs, _tabList)) {
       final selected = _tabList.isEmpty
           ? null

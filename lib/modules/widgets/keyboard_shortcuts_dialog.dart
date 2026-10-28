@@ -3,7 +3,7 @@ import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:shiori/shiori.dart';
 
 /// Lists keyboard shortcuts in a dialog: what each does, and its keys as key
-/// caps. The readers and the video player each give their own [shortcuts].
+/// caps. The novel reader provides [shortcuts].
 Future<void> showKeyboardShortcuts(
   BuildContext context,
   List<(String label, List<String> keys)> shortcuts,
