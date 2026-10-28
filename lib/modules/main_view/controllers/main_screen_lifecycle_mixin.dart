@@ -7,7 +7,6 @@ import 'package:mangayomi/modules/more/about/providers/check_for_update.dart';
 import 'package:mangayomi/modules/more/about/providers/download_file_screen.dart';
 import 'package:mangayomi/modules/more/data_and_storage/providers/auto_backup.dart';
 import 'package:mangayomi/modules/more/settings/sync/providers/sync_providers.dart';
-import 'package:mangayomi/services/discord_rpc.dart';
 import 'package:mangayomi/services/fetch_item_sources.dart';
 import 'package:mangayomi/services/sync_server.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
@@ -20,13 +19,11 @@ mixin MainScreenLifecycleMixin<T extends ConsumerStatefulWidget>
   void initLifecycleServices() {
     _initializeTimers();
     _initializeProviders();
-    discordRpc?.connect(ref);
   }
 
   void disposeLifecycleServices() {
     _backupTimer?.cancel();
     _syncTimer?.cancel();
-    discordRpc?.disconnect();
   }
 
   void _rescheduleSyncTimer() {

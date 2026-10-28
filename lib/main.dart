@@ -41,13 +41,11 @@ import 'package:mangayomi/services/http/m_client.dart';
 import 'package:mangayomi/services/m_extension_server.dart';
 import 'package:mangayomi/services/download_manager/m_downloader.dart';
 import 'package:mangayomi/src/rust/frb_generated.dart';
-import 'package:mangayomi/utils/discord_rpc.dart';
 import 'package:mangayomi/services/crash_native.dart';
 import 'package:mangayomi/services/crash_report.dart';
 import 'package:mangayomi/utils/log/logger.dart';
 import 'package:mangayomi/utils/client_id.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
-import 'package:mangayomi/utils/url_protocol/api.dart';
 import 'package:mangayomi/modules/more/settings/appearance/providers/theme_provider.dart';
 import 'package:mangayomi/modules/library/providers/file_scanner.dart';
 import 'package:mangayomi/utils/app_lock.dart';
@@ -72,7 +70,6 @@ import 'package:mangayomi/modules/widgets/memory_overlay.dart';
 import 'package:mangayomi/modules/widgets/app_ui_scale.dart';
 import 'package:mangayomi/modules/more/settings/appearance/providers/app_ui_scale_state_provider.dart';
 import 'package:mangayomi/utils/error_toast.dart';
-export 'package:mangayomi/services/discord_rpc.dart' show discordRpc;
 
 void main(List<String> args) async {
   // Zone-level catch-all for anything that slips through both layers
@@ -124,9 +121,6 @@ void main(List<String> args) async {
       if (!isMobile) {
         await windowManager.ensureInitialized();
         await WindowGeometry.restore();
-      }
-      if (Platform.isWindows) {
-        registerProtocolHandler("mangayomi");
       }
       final storage = StorageProvider();
       // Don't force the Android "all files access" (MANAGE_EXTERNAL_STORAGE)
@@ -246,10 +240,6 @@ Future<void> _postLaunchInit(StorageProvider storage) async {
   unawaited(backfillMissingClientIds());
   unawaited(MDownloader.initializeIsolatePool(poolSize: 6));
   unawaited(_deleteLegacyHiveCache());
-  if (isDesktop && !kDebugMode) {
-    discordRpc = DiscordRPC(applicationId: "1395040506677039157");
-    await discordRpc?.initialize();
-  }
   await storage.deleteBtDirectory();
   await webviewServer();
   // Deferred until after runApp() creates the window: on Windows,
@@ -536,7 +526,6 @@ class _MyAppState extends ConsumerState<MyApp>
     }
     MExtensionServerPlatform(ref).stopServer();
     _linkSubscription?.cancel();
-    discordRpc?.destroy();
     stopwebviewServer();
     AppLogger.dispose();
     super.dispose();

@@ -52,7 +52,6 @@ dependencies:
   cupertino_icons: ^1.0.9
   window_manager: ^0.5.1
   ffi: ^2.1.5
-  ffigen: ^22.0.0
   http_interceptor: ^2.0.0
   js_packer: ^0.0.6
   flutter_qjs:
@@ -75,17 +74,11 @@ dependencies:
   convert: ^3.1.2
   connectivity_plus: 6.1.4
   app_links: ^7.0.0
-  win32: ^6.3.0
-  win32_registry: ^3.0.3
   protobuf: ^5.0.0
   fixnum: ^1.1.1
   device_info_plus: ^13.2.0
   marquee: ^2.2.3
   d4rt: ^0.2.6
-  flutter_discord_rpc_fork:
-    git:
-      url: https://github.com/kodjodevf/flutter-discord-rpc.git
-      ref: update_frb
   table_calendar: ^3.2.0
   local_auth: ^3.0.1
   wakelock_plus: ^1.7.0

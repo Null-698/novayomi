@@ -48,8 +48,8 @@ class TestSource extends MProvider {
   /// [page] starts at 1 and goes up while more pages exist.
   ///
   /// Return `MPages(list, hasNextPage)`:
-  /// - `list`: the entries on this page. Each entry (a manga, anime or
-  ///   novel) is an `MManga`; see the example below.
+  /// - `list`: the novels on this page, represented as `MManga` for
+  ///   compatibility with the shared extension interface.
   /// - `hasNextPage`: true if there is another page after this one.
   ///
   /// Example of one entry (all three fields are needed):
@@ -105,8 +105,7 @@ class TestSource extends MProvider {
     // TODO: implement
   }
 
-  /// Returns the full details of one entry, including its list of chapters
-  /// (episodes, for anime).
+  /// Returns the full details of a novel and its chapters.
   ///
   /// [url] is the `link` you gave this entry in the listing or search results.
   ///
@@ -133,7 +132,7 @@ class TestSource extends MProvider {
   /// - `status` is one of `MStatus.ongoing`, `MStatus.completed`,
   ///   `MStatus.onHiatus`, `MStatus.canceled`, `MStatus.publishingFinished`
   ///   or `MStatus.unknown`.
-  /// - `chapters` holds one `MChapter` per chapter, or per episode for anime.
+  /// - `chapters` holds one `MChapter` per novel chapter.
   ///   `name` and `url` are required. `dateUpload` is optional: the upload
   ///   time in milliseconds since 1970, written as a String.
   ///   `scanlator` is optional: the group that released it.
@@ -178,50 +177,16 @@ class TestSource extends MProvider {
     // TODO: implement
   }
 
-  // For anime episode video list
-  /// Returns the available videos of one episode, for example one per
-  /// quality or server.
-  ///
-  /// [url] is the episode's `url` from [getDetail].
-  ///
-  /// Return a list with one `MVideo` per video:
-  ///
-  ///     MVideo(
-  ///       "https://example.com/video.m3u8",
-  ///       "1080p",
-  ///       "https://example.com/video.m3u8",
-  ///       headers: {"Referer": "https://example.com"},
-  ///       subtitles: [MTrack(file: "https://example.com/en.vtt", label: "English")],
-  ///     )
-  ///
-  /// The three positional values are, in order: the direct video link, a
-  /// quality label shown to the user (for example "1080p" or "Server 1"),
-  /// and the video's original URL (often the same as the direct link).
-  /// A video missing the link or the original URL is skipped.
-  /// `headers` (needed to play the video), `subtitles` and `audios` (lists of
-  /// `MTrack`) are optional.
-  ///
-  /// For common video hosts there are ready-made helpers that take the
-  /// host's page URL and return the list of videos for you, so you can
-  /// return it as it is. Some take extra values, such as a label prefix or
-  /// a quality: `streamWishExtractor`, `filemoonExtractor`,
-  /// `streamTapeExtractor`, `doodExtractor`, `voeExtractor`,
-  /// `okruExtractor`, `sibnetExtractor`, `mp4UploadExtractor`,
-  /// `gogoCdnExtractor`, `myTvExtractor`, `vidBomExtractor`,
-  /// `streamlareExtractor`, `sendVidExtractor` and `yourUploadExtractor`.
+  // Legacy bridge methods are required by the abstract extension interface.
+  // Novel extensions have no video streams or image-page lists.
   @override
   Future<List<MVideo>> getVideoList(String url) async {
-    // TODO: implement
+    return [];
   }
 
-  // For manga chapter pages
-  /// Returns the image URLs of one chapter's pages, in reading order, as a
-  /// list of Strings.
-  ///
-  /// [url] is the chapter's `url` from [getDetail].
   @override
-  Future<List<String>> getPageList(String url) async{
-    // TODO: implement
+  Future<List<String>> getPageList(String url) async {
+    return [];
   }
 
   /// Optional. Returns the filters shown on the search screen, for example
@@ -339,10 +304,8 @@ class DefaultExtension extends MProvider {
      * Returns one page of the source's popular entries (shown when browsing).
      * @param {number} page starts at 1 and goes up while more pages exist
      * @returns {Promise<{list: Object[], hasNextPage: boolean}>}
-     *     list: the entries on this page. Each entry (a manga, anime or
-     *     novel) is an object with a name (the title), a link (the URL or
-     *     path of its page) and an imageUrl (its cover image). All three
-     *     are needed.
+     *     list: the novels on this page, each with a name (title), a
+     *     link (detail URL or path) and imageUrl (cover image).
      *     hasNextPage: true if there is another page after this one.
      * @example
      * return {
@@ -414,8 +377,7 @@ class DefaultExtension extends MProvider {
     }
 
     /**
-     * Returns the full details of one entry, including its list of chapters
-     * (episodes, for anime).
+     * Returns the full details of a novel, including its chapters.
      * @param {string} url the link you gave this entry in the listing or
      *     search results
      * @returns {Promise<Object>} an object with the fields below. Leave out
@@ -423,11 +385,9 @@ class DefaultExtension extends MProvider {
      *     status: 0 ongoing, 1 completed, 2 on hiatus, 3 canceled,
      *     4 publishing finished. Any other value means unknown. Convert
      *     the website's wording to these numbers yourself.
-     *     chapters: one object per chapter, or per episode for anime. name
-     *     and url are required. dateUpload is optional: the upload time in
-     *     milliseconds since 1970, written as a string. scanlator is
-     *     optional: the group that released it. Anime episodes can also have
-     *     thumbnailUrl, description, duration, downloadSize and isFiller.
+     *     chapters: one object per novel chapter. name and url are
+     *     required. dateUpload is optional: the upload time in
+     *     milliseconds since 1970, written as a string.
      *     To get dateUpload from the website's date text, use
      *     parseDates(dates, format, locale): it takes an array of date texts,
      *     the format the website writes dates in and its language, and
@@ -472,56 +432,6 @@ class DefaultExtension extends MProvider {
      */
     async cleanHtmlContent(html) {
         throw new Error("cleanHtmlContent not implemented");
-    }
-
-    // For anime episode video list
-    /**
-     * Returns the available videos of one episode, for example one per
-     * quality or server.
-     * @param {string} url the episode's url from getDetail
-     * @returns {Promise<Object[]>} one object per video. url (the direct
-     *     video link), quality (a label shown to the user, for example
-     *     "1080p" or "Server 1") and originalUrl (the video's original URL,
-     *     often the same as url) are needed; a video missing url or
-     *     originalUrl is skipped. headers (needed to play the video),
-     *     subtitles and audios are optional.
-     *     For common video hosts there are ready-made helpers that take the
-     *     host's page URL and return the array of videos for you, so you
-     *     can return it as it is. Some take extra values, such as a label
-     *     prefix or a quality: streamWishExtractor, filemoonExtractor,
-     *     streamTapeExtractor, doodExtractor, voeExtractor, okruExtractor,
-     *     sibnetExtractor, mp4UploadExtractor, gogoCdnExtractor,
-     *     myTvExtractor, vidBomExtractor, streamlareExtractor,
-     *     sendVidExtractor and yourUploadExtractor. For example
-     *     return await streamWishExtractor(url, "StreamWish - ").
-     * @example
-     * return [
-     *     {
-     *         url: "https://example.com/video.m3u8",
-     *         quality: "1080p",
-     *         originalUrl: "https://example.com/video.m3u8",
-     *         headers: { "Referer": "https://example.com" },
-     *         subtitles: [{ file: "https://example.com/en.vtt", label: "English" }],
-     *         audios: []
-     *     }
-     * ];
-     */
-    async getVideoList(url) {
-        throw new Error("getVideoList not implemented");
-    }
-
-    // For manga chapter pages
-    /**
-     * Returns the pages of one chapter, in reading order.
-     * @param {string} url the chapter's url from getDetail
-     * @returns {Promise<Array<string | {url: string, headers: Object<string, string>}>>}
-     *     one item per page: either the image URL as a string, or an object
-     *     with the image url and the headers needed to load it.
-     * @example
-     * return ["https://example.com/1.jpg", "https://example.com/2.jpg"];
-     */
-    async getPageList(url) {
-        throw new Error("getPageList not implemented");
     }
 
     /**

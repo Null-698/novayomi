@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shiori/shiori.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mangayomi/services/discord_rpc.dart';
 import 'package:mangayomi/modules/more/settings/general/providers/memory_probe_provider.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/more/providers/algorithm_weights_state_provider.dart';
@@ -44,15 +43,6 @@ class _GeneralStateScreen extends ConsumerState<GeneralScreen> {
     final l10n = context.l10n;
     final customDns = ref.watch(customDnsStateProvider);
     final userAgent = ref.watch(userAgentStateProvider);
-    final enableDiscordRpc = ref.watch(enableDiscordRpcStateProvider);
-    final hideDiscordRpcInIncognito = ref.watch(
-      hideDiscordRpcInIncognitoStateProvider,
-    );
-    final rpcShowReadingWatchingProgress = ref.watch(
-      rpcShowReadingWatchingProgressStateProvider,
-    );
-    final rpcShowTitleState = ref.watch(rpcShowTitleStateProvider);
-    final rpcShowCoverImage = ref.watch(rpcShowCoverImageStateProvider);
     final showNavDoubleTapTooltip = ref.watch(
       showNavDoubleTapTooltipStateProvider,
     );
@@ -199,53 +189,6 @@ class _GeneralStateScreen extends ConsumerState<GeneralScreen> {
                       .set(defaultWeights);
                 },
               ),
-            ],
-          ),
-          ShioriSettingsGroup(
-            title: l10n.group_discord,
-            children: [
-              ShioriSwitchRow(
-                title: l10n.enable_discord_rpc,
-                value: enableDiscordRpc,
-                onChanged: (value) {
-                  ref.read(enableDiscordRpcStateProvider.notifier).set(value);
-                  if (value) {
-                    discordRpc?.connect(ref);
-                  } else {
-                    discordRpc?.disconnect();
-                  }
-                },
-              ),
-              if (enableDiscordRpc) ...[
-                ShioriSwitchRow(
-                  title: l10n.hide_discord_rpc_incognito,
-                  value: hideDiscordRpcInIncognito,
-                  onChanged: (v) => ref
-                      .read(hideDiscordRpcInIncognitoStateProvider.notifier)
-                      .set(v),
-                ),
-                ShioriSwitchRow(
-                  title: l10n.rpc_show_reading_watching_progress,
-                  value: rpcShowReadingWatchingProgress,
-                  onChanged: (v) => ref
-                      .read(
-                        rpcShowReadingWatchingProgressStateProvider.notifier,
-                      )
-                      .set(v),
-                ),
-                ShioriSwitchRow(
-                  title: l10n.rpc_show_title,
-                  value: rpcShowTitleState,
-                  onChanged: (v) =>
-                      ref.read(rpcShowTitleStateProvider.notifier).set(v),
-                ),
-                ShioriSwitchRow(
-                  title: l10n.rpc_show_cover_image,
-                  value: rpcShowCoverImage,
-                  onChanged: (v) =>
-                      ref.read(rpcShowCoverImageStateProvider.notifier).set(v),
-                ),
-              ],
             ],
           ),
           ShioriSettingsGroup(

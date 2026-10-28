@@ -31,7 +31,6 @@ class _CreateExtensionState extends State<CreateExtension> {
       : _sourceTypeValues
             .indexOf(widget.editSource!.typeSource ?? "")
             .clamp(0, _sourceTypeValues.length - 1);
-  late int _itemTypeIndex = widget.editSource?.itemType.index ?? 0;
   late int _languageIndex = switch (widget.editSource?.sourceCodeLanguage) {
     SourceCodeLanguage.javascript => 1,
     SourceCodeLanguage.lnreader => 2,
@@ -46,9 +45,9 @@ class _CreateExtensionState extends State<CreateExtension> {
     final sourceTypeLabels = [
       l10n.source_type_single,
       l10n.source_type_multi,
-      l10n.source_type_torrent,
+      if (_isEditMode && widget.editSource?.typeSource == 'torrent')
+        l10n.source_type_torrent,
     ];
-    final itemTypeLabels = [l10n.manga, l10n.anime, l10n.novel];
     final languageLabels = [
       l10n.source_language_dart,
       l10n.source_language_javascript,
@@ -146,18 +145,6 @@ class _CreateExtensionState extends State<CreateExtension> {
                     ? null
                     : (v) => setState(() => _sourceTypeIndex = v),
               ),
-              ShioriValueRow<int>(
-                title: l10n.target,
-                icon: _isEditMode ? Symbols.lock_rounded : null,
-                value: _itemTypeIndex,
-                options: [
-                  for (final (i, label) in itemTypeLabels.indexed)
-                    ShioriChoice(i, label),
-                ],
-                onChanged: _isEditMode
-                    ? null
-                    : (v) => setState(() => _itemTypeIndex = v),
-              ),
               ShioriSwitchRow(
                 title: "NSFW",
                 value: _isNsfw,
@@ -203,9 +190,7 @@ class _CreateExtensionState extends State<CreateExtension> {
                               apiUrl: _apiUrl,
                               iconUrl: _iconUrl,
                               typeSource: _sourceTypeValues[_sourceTypeIndex],
-                              itemType: ItemType.values.elementAt(
-                                _itemTypeIndex,
-                              ),
+                              itemType: ItemType.novel,
                               isAdded: true,
                               isActive: true,
                               version: "0.0.1",

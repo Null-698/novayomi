@@ -12,7 +12,6 @@ import 'package:shiori/shiori.dart';
 import 'package:mangayomi/services/volume_keys.dart';
 import 'package:mangayomi/modules/reader_common/utils/reader_orientation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mangayomi/services/discord_rpc.dart';
 import 'package:mangayomi/models/chapter.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/repositories/chapter_repository.dart';
@@ -112,7 +111,6 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
   int fontSize = 14;
 
   final Stopwatch _readingStopwatch = Stopwatch();
-  int? _discordReaderSession;
 
   void onScroll() {
     if (scrollController.hasClients) {
@@ -148,10 +146,6 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
       setFullScreen(value: false);
     } else {
       restoreSystemUI();
-    }
-    final discordReaderSession = _discordReaderSession;
-    if (discordReaderSession != null) {
-      unawaited(discordRpc?.endReaderSession(discordReaderSession));
     }
     WakelockPlus.disable();
     super.dispose();
@@ -241,8 +235,6 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
       }
     });
     if (!isDesktop) SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-    _discordReaderSession = discordRpc?.beginReaderSession();
-    discordRpc?.showChapterDetails(ref, chapter);
 
     initTtsSubscriptions();
   }

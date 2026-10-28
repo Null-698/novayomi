@@ -49,8 +49,7 @@ jobs:
         run: flutter pub get
 
       # Repository tests open a real Isar database and download its native
-      # core on first use; the C++ image decoder is built by hook/build.dart
-      # with the runner's clang. Neither needs the Rust toolchain.
+      # core on first use. Neither needs the Rust toolchain.
       - name: Run tests
         run: flutter test
 

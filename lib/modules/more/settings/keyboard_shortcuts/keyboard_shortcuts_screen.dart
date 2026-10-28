@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mangayomi/modules/anime/utils/player_shortcuts.dart';
 import 'package:mangayomi/modules/reader_common/mixins/reader_gestures.dart';
 import 'package:mangayomi/modules/reader_common/key_bindings.dart';
-import 'package:mangayomi/modules/more/settings/player/providers/player_state_provider.dart';
 import 'package:mangayomi/modules/widgets/keyboard_shortcuts_dialog.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/utils/platform_utils.dart';
 import 'package:shiori/shiori.dart';
 
-/// The reader's and the player's keys, each rebound in place: tap a row,
-/// press the keys, and the row shows them. The fixed keys (? and F1, the
-/// frame steps, Anime4K) are left out; the lists in the reader and the
-/// player still show them.
+/// Rebind the novel reader's keyboard shortcuts. Video player bindings are
+/// retained in saved settings for compatibility but no longer appear here.
 class KeyboardShortcutsScreen extends ConsumerStatefulWidget {
   const KeyboardShortcutsScreen({super.key});
 
@@ -71,11 +67,6 @@ class _KeyboardShortcutsScreenState
 
   String _label(Enum shortcut) => switch (shortcut) {
     final ReaderShortcut s => readerShortcutLabel(s, context.l10n),
-    final PlayerShortcut s => playerShortcutLabel(
-      s,
-      context.l10n,
-      skipIntroSeconds: ref.read(defaultSkipIntroLengthStateProvider),
-    ),
     _ => shortcut.name,
   };
 
@@ -127,36 +118,12 @@ class _KeyboardShortcutsScreenState
       body: Focus(
         focusNode: _focus,
         onKeyEvent: _onKey,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // The player's list is the longer one, so it takes the left.
-            final player = _card(l10n.player, [
-              for (final shortcut in PlayerShortcut.values)
-                if (defaultKeyBindings.containsKey(shortcut)) row(shortcut),
-            ]);
-            final reader = _card(l10n.reader, [
-              for (final shortcut in ReaderShortcut.values)
-                if (defaultKeyBindings.containsKey(shortcut)) row(shortcut),
-            ]);
-            // Side by side where there is room, stacked on narrow windows so
-            // the keys never run into the labels.
-            return SingleChildScrollView(
-              padding: tvPageInsets.add(const EdgeInsets.all(ShioriSpace.s12)),
-              child: constraints.maxWidth >= 900
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: ShioriSpace.s12,
-                      children: [
-                        Expanded(child: player),
-                        Expanded(child: reader),
-                      ],
-                    )
-                  : Column(
-                      spacing: ShioriSpace.s12,
-                      children: [player, reader],
-                    ),
-            );
-          },
+        child: SingleChildScrollView(
+          padding: tvPageInsets.add(const EdgeInsets.all(ShioriSpace.s12)),
+          child: _card(l10n.reader, [
+            for (final shortcut in ReaderShortcut.values)
+              if (defaultKeyBindings.containsKey(shortcut)) row(shortcut),
+          ]),
         ),
       ),
     );
