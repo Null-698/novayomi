@@ -151,7 +151,7 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
               await categoryRepository.save(c..name = name);
             case 'hide':
               final value = args['value'] as bool?;
-              if (value != null) await categoryRepository.setHidden(c, value);
+              if (value != null) await categoryRepository.save(c..hide = value);
             case 'updates':
               final value = args['value'] as bool?;
               if (value != null) await categoryRepository.save(c..shouldUpdate = value);
