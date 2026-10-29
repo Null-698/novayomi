@@ -1213,6 +1213,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     ]))
     form.addArrangedSubview(section("Auto-scroll", children: [
       switchRow("Auto-scroll while reading", control: autoScroll),
+      sectionHint("Auto-scroll speed (2–30)"),
       sliderRow(autoScrollSpeed, value: nil)
     ]))
     form.addArrangedSubview(section("Screen brightness", children: [
@@ -1221,9 +1222,13 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   }
 
   private func showSpeechSettings() {
-    form.addArrangedSubview(section("Text-to-Speech", children: [
-      sliderRow(ttsSpeed, value: ttsSpeedLabel),
-      sliderRow(ttsPitch, value: ttsPitchLabel),
+    form.addArrangedSubview(section("Speech rate", children: [
+      sliderRow(ttsSpeed, value: ttsSpeedLabel)
+    ]))
+    form.addArrangedSubview(section("Speech pitch", children: [
+      sliderRow(ttsPitch, value: ttsPitchLabel)
+    ]))
+    form.addArrangedSubview(section("Voice language", children: [
       languageButton
     ]))
     let play = UIButton(type: .system)
@@ -1232,6 +1237,14 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     play.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     play.addTarget(self, action: #selector(speakTapped), for: .touchUpInside)
     form.addArrangedSubview(section("Playback", children: [play]))
+  }
+
+  private func sectionHint(_ content: String) -> UILabel {
+    let label = UILabel()
+    label.text = content
+    label.font = .preferredFont(forTextStyle: .footnote)
+    label.textColor = .secondaryLabel
+    return label
   }
 
   private func section(_ title: String, children: [UIView]) -> UIView {
@@ -1272,8 +1285,14 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   }
 
   private func sliderRow(_ slider: UISlider, value: UILabel?) -> UIView {
-    let parts: [UIView] = value.map { [slider, $0] } ?? [slider]
-    return horizontalRow(parts)
+    guard let value else { return slider }
+    let row = UIStackView(arrangedSubviews: [slider, value])
+    row.axis = .horizontal
+    row.alignment = .center
+    row.distribution = .fill
+    row.spacing = 14
+    value.widthAnchor.constraint(equalToConstant: 56).isActive = true
+    return row
   }
 
   private func setupSlider(_ slider: UISlider, min: Float, max: Float,
