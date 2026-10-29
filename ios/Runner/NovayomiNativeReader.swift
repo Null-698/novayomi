@@ -12,10 +12,11 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   var onDismiss: (() -> Void)?
   private let webView: WKWebView
   private let speech = AVSpeechSynthesizer()
-  private let progressControl = UISlider(frame: CGRect(x: 0, y: 0, width: 130, height: 35))
-  private let progressStack = UIStackView()
+  private let progressControl = UISlider()
   private let progressCaption = UILabel()
-  private let progressItem: UIBarButtonItem
+  private lazy var readerControls = NovayomiReaderControls(
+    progress: progressControl, caption: progressCaption
+  )
   private var lastDisplayedPercent = -1
   private var chapter: [String: Any]
   private var currentProgress = 0.0
@@ -59,7 +60,6 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     config.defaultWebpagePreferences.allowsContentJavaScript = false
     config.allowsInlineMediaPlayback = false
     webView = WKWebView(frame: .zero, configuration: config)
-    progressItem = UIBarButtonItem(customView: progressStack)
     super.init(nibName: nil, bundle: nil)
     speech.delegate = self
   }
@@ -111,24 +111,33 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     backSwipe.delegate = self
     view.addGestureRecognizer(backSwipe)
 
-    progressStack.axis = .vertical
-    progressStack.alignment = .fill
-    progressStack.spacing = 0
-    progressStack.frame = CGRect(x: 0, y: 0, width: 86, height: 44)
-    progressStack.addArrangedSubview(progressControl)
-    progressCaption.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
-    progressCaption.textAlignment = .center
-    progressCaption.textColor = .secondaryLabel
-    progressStack.addArrangedSubview(progressCaption)
-    progressControl.widthAnchor.constraint(equalToConstant: 86).isActive = true
-
+    // Mirror NovelBottomBar: [Previous | progress slider | Next], a separator,
+    // then [Chapters | Font size | Layout | TTS | Settings]. This is one
+    // native UIKit glass panel; do not squeeze the slider into UIToolbar.
     progressControl.minimumValue = 0
     progressControl.maximumValue = 1
     progressControl.value = Float(currentProgress)
     progressControl.accessibilityLabel = "Reading progress"
-    updatePercentLabel()
     progressControl.addTarget(self, action: #selector(progressChanged(_:)), for: .valueChanged)
-    progressControl.addTarget(self, action: #selector(progressEnded(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+    progressControl.addTarget(self, action: #selector(progressEnded(_:)),
+                              for: [.touchUpInside, .touchUpOutside, .touchCancel])
+
+    readerControls.onPrevious = { [weak self] in self?.previousChapter() }
+    readerControls.onNext = { [weak self] in self?.nextChapter() }
+    readerControls.onChapters = { [weak self] in self?.showChapters() }
+    readerControls.onFont = { [weak self] in self?.showFontSizeSheet() }
+    readerControls.onLayout = { [weak self] in self?.cycleReadingLayout() }
+    readerControls.onSpeech = { [weak self] in self?.toggleSpeech() }
+    readerControls.onSettings = { [weak self] in self?.showSettings() }
+    readerControls.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(readerControls)
+    NSLayoutConstraint.activate([
+      readerControls.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 8),
+      readerControls.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -8),
+      readerControls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+      readerControls.heightAnchor.constraint(equalToConstant: 124)
+    ])
+    updatePercentLabel()
 
     previousIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
     UIApplication.shared.isIdleTimerDisabled = chapter["keepAwake"] as? Bool ?? false
@@ -141,7 +150,10 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     overrideUserInterfaceStyle = isDarkBook ? .dark : .light
     navigationController?.overrideUserInterfaceStyle = isDarkBook ? .dark : .light
     navigationController?.setNavigationBarHidden(!chromeVisible, animated: false)
-    navigationController?.setToolbarHidden(!chromeVisible, animated: false)
+    // The reader's two-row control surface owns the bottom chrome.
+    // UIToolbar is intentionally hidden so it cannot duplicate buttons.
+    navigationController?.setToolbarHidden(true, animated: false)
+    readerControls.isHidden = !chromeVisible
     navigationController?.navigationBar.prefersLargeTitles = false
     // No custom navigation-bar background. iOS 26+ supplies native
     // Liquid Glass and its gradual bar-edge treatment automatically.
@@ -158,7 +170,9 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     // The inset is fixed for the entire chapter. It does not change when
     // chrome hides, status-bar visibility changes, or a drag is in progress.
     let top = max(110, view.window?.safeAreaInsets.top ?? 0)
-    let bottom = max(102, view.window?.safeAreaInsets.bottom ?? 0)
+    // Reserve room for the original two-row reader chrome without constantly
+    // readjusting scroll offsets during gestures.
+    let bottom = max(146, (view.window?.safeAreaInsets.bottom ?? 0) + 130)
     contentInsets = UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0)
     webView.scrollView.contentInset = contentInsets
     webView.scrollView.scrollIndicatorInsets = contentInsets
@@ -347,11 +361,27 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   }
 
   private func updatePercentLabel() {
-    progressCaption.isHidden = !(chapter["showPercent"] as? Bool ?? true)
     let percentage = Int((currentProgress * 100).rounded())
-    guard percentage != lastDisplayedPercent else { return }
+    let showCaption = chapter["showPercent"] as? Bool ?? true
+    let leading: String
+    let trailing: String
+    if readingMode == "pages", didInitialLoad {
+      let width = max(1, webView.scrollView.bounds.width)
+      let pages = max(1, Int(ceil(webView.scrollView.contentSize.width / width)))
+      let current = min(pages, max(1, Int(round(currentProgress * Double(max(0, pages - 1)))) + 1))
+      leading = "\(current)"
+      trailing = "\(pages)"
+    } else {
+      leading = "\(percentage)%"
+      trailing = "100%"
+    }
+    readerControls.updateProgress(
+      value: currentProgress,
+      leading: leading,
+      trailing: trailing,
+      caption: showCaption ? "\(percentage)%" : nil
+    )
     lastDisplayedPercent = percentage
-    progressCaption.text = "\(percentage)%"
   }
 
   private func reportProgress(force: Bool) {
@@ -422,70 +452,14 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     bookmarkItem.accessibilityLabel = bookmarked ? "Remove bookmark" : "Bookmark"
     navigationItem.rightBarButtonItems = [bookmarkItem]
 
-    let previous = UIBarButtonItem(
-      image: UIImage(systemName: "backward.end.fill"), style: .plain,
-      target: self, action: #selector(previousChapter))
-    previous.isEnabled = chapter["hasPrevious"] as? Bool ?? false
-    previous.accessibilityLabel = "Previous chapter"
-    let chapterList = UIBarButtonItem(
-      image: UIImage(systemName: "list.number"), style: .plain,
-      target: self, action: #selector(showChapters))
-    chapterList.accessibilityLabel = "All chapters"
-    let settings = UIBarButtonItem(
-      image: UIImage(systemName: "textformat.size"), style: .plain,
-      target: self, action: #selector(showSettings))
-    settings.accessibilityLabel = "Reading settings"
-    let next = UIBarButtonItem(
-      image: UIImage(systemName: "forward.end.fill"), style: .plain,
-      target: self, action: #selector(nextChapter))
-    next.isEnabled = chapter["hasNext"] as? Bool ?? false
-    next.accessibilityLabel = "Next chapter"
-    progressControl.isEnabled = true
-    progressStack.frame.size.width = 86
-    let overflow = UIBarButtonItem(
-      image: UIImage(systemName: "ellipsis.circle"),
-      menu: makeMenu()
+    readerControls.configure(
+      hasPrevious: chapter["hasPrevious"] as? Bool ?? false,
+      hasNext: chapter["hasNext"] as? Bool ?? false,
+      mode: readingMode,
+      pageLayout: safeString("pageLayout", fallback: "single"),
+      speaking: speech.isSpeaking
     )
-    overflow.accessibilityLabel = "More reader actions"
-    toolbarItems = [
-      previous, chapterList,
-      UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-      progressItem,
-      UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-      settings, overflow, next
-    ]
-    navigationController?.toolbar.tintColor = .label
-  }
-
-  private func makeMenu() -> UIMenu {
-    let chapters = UIAction(title: "All Chapters", image: UIImage(systemName: "list.number")) { [weak self] _ in
-      self?.showChapters()
-    }
-    let smaller = UIAction(title: "Smaller Text", image: UIImage(systemName: "textformat.size.smaller")) { [weak self] _ in
-      self?.adjustFont(-1)
-    }
-    let larger = UIAction(title: "Larger Text", image: UIImage(systemName: "textformat.size.larger")) { [weak self] _ in
-      self?.adjustFont(1)
-    }
-    let lineTight = UIAction(title: "Less Line Spacing", image: UIImage(systemName: "decrease.indent")) { [weak self] _ in
-      self?.adjustLineHeight(-0.1)
-    }
-    let lineLoose = UIAction(title: "More Line Spacing", image: UIImage(systemName: "increase.indent")) { [weak self] _ in
-      self?.adjustLineHeight(0.1)
-    }
-    let mode = UIAction(
-      title: readingMode == "scroll" ? "Paged Reading" : "Continuous Scrolling",
-      image: UIImage(systemName: readingMode == "scroll" ? "book.pages" : "scroll")
-    ) { [weak self] _ in self?.switchMode() }
-    let voice = UIAction(
-      title: speech.isSpeaking ? "Stop Reading Aloud" : "Read Aloud",
-      image: UIImage(systemName: "waveform")
-    ) { [weak self] _ in self?.toggleSpeech() }
-    return UIMenu(children: [
-      chapters, UIMenu(title: "Appearance", image: UIImage(systemName: "textformat.size"),
-                       children: [smaller, larger, lineTight, lineLoose, mode]),
-      voice
-    ])
+    updatePercentLabel()
   }
 
   @objc private func showChapters() {
@@ -509,6 +483,27 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       sheet.prefersScrollingExpandsWhenScrolledToEdge = true
     }
     present(navigation, animated: true)
+  }
+
+  @objc private func showFontSizeSheet() {
+    let sheet = NovayomiFontSizeSheet(fontSize: fontSize)
+    sheet.onSizeChanged = { [weak self] size in self?.setFontSize(size) }
+    presentReaderSheet(sheet)
+  }
+
+  @objc private func cycleReadingLayout() {
+    // Follows novel_bottom_bar.dart: continuous -> single-page ->
+    // double-page -> continuous, keeping existing saved settings in sync.
+    let layout = safeString("pageLayout", fallback: "single")
+    if readingMode == "scroll" {
+      chapter["pageLayout"] = "single"
+      onEvent?(["type": "pageLayout", "value": "single"])
+      switchMode()
+    } else if layout == "single" {
+      applyReaderSetting(key: "pageLayout", value: "double")
+    } else {
+      switchMode()
+    }
   }
 
   @objc private func showSettings() {
@@ -754,7 +749,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     guard chromeVisible != visible else { return }
     chromeVisible = visible
     navigationController?.setNavigationBarHidden(!visible, animated: true)
-    navigationController?.setToolbarHidden(!visible, animated: true)
+    readerControls.isHidden = !visible
+    navigationController?.setToolbarHidden(true, animated: false)
     if #available(iOS 26.0, *) {
       webView.scrollView.topEdgeEffect.isHidden = visible
       webView.scrollView.bottomEdgeEffect.isHidden = visible
@@ -1538,4 +1534,233 @@ final class NovayomiReaderNavigationController: UINavigationController {
   override var childForHomeIndicatorAutoHidden: UIViewController? { topViewController }
   override var childForStatusBarHidden: UIViewController? { topViewController }
   override var childForStatusBarStyle: UIViewController? { topViewController }
+}
+
+
+/// UIKit implementation of lib/modules/novel/widgets/novel_bottom_bar.dart.
+/// Both rows share one system-controlled glass material. The slider takes all
+/// remaining width rather than being constrained by a UIBarButtonItem.
+private final class NovayomiReaderControls: UIView {
+  var onPrevious: (() -> Void)?
+  var onNext: (() -> Void)?
+  var onChapters: (() -> Void)?
+  var onFont: (() -> Void)?
+  var onLayout: (() -> Void)?
+  var onSpeech: (() -> Void)?
+  var onSettings: (() -> Void)?
+
+  private let material: UIVisualEffectView
+  private let slider: UISlider
+  private let caption: UILabel
+  private let currentLabel = UILabel()
+  private let endLabel = UILabel()
+  private let previous = UIButton(type: .system)
+  private let next = UIButton(type: .system)
+  private let chapterButton = UIButton(type: .system)
+  private let fontButton = UIButton(type: .system)
+  private let layoutButton = UIButton(type: .system)
+  private let speechButton = UIButton(type: .system)
+  private let settingsButton = UIButton(type: .system)
+
+  init(progress: UISlider, caption: UILabel) {
+    slider = progress
+    self.caption = caption
+    if #available(iOS 26.0, *) {
+      material = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      material.cornerConfiguration = .corners(radius: 24)
+    } else {
+      material = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+      material.layer.cornerRadius = 24
+      material.clipsToBounds = true
+    }
+    super.init(frame: .zero)
+    backgroundColor = .clear
+    material.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(material)
+    NSLayoutConstraint.activate([
+      material.leadingAnchor.constraint(equalTo: leadingAnchor),
+      material.trailingAnchor.constraint(equalTo: trailingAnchor),
+      material.topAnchor.constraint(equalTo: topAnchor),
+      material.bottomAnchor.constraint(equalTo: bottomAnchor)
+    ])
+
+    configureButton(previous, symbol: "backward.end.fill", label: "Previous chapter", selector: #selector(previousTapped))
+    configureButton(next, symbol: "forward.end.fill", label: "Next chapter", selector: #selector(nextTapped))
+    previous.widthAnchor.constraint(equalToConstant: 40).isActive = true
+    next.widthAnchor.constraint(equalToConstant: 40).isActive = true
+
+    for label in [currentLabel, endLabel] {
+      label.textColor = .label
+      label.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+      label.textAlignment = .center
+      label.setContentCompressionResistancePriority(.required, for: .horizontal)
+      label.widthAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
+    }
+    slider.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    let progressRow = UIStackView(arrangedSubviews: [
+      previous, currentLabel, slider, endLabel, next
+    ])
+    progressRow.axis = .horizontal
+    progressRow.alignment = .center
+    progressRow.spacing = 6
+    progressRow.translatesAutoresizingMaskIntoConstraints = false
+    material.contentView.addSubview(progressRow)
+
+    let separator = UIView()
+    separator.backgroundColor = .separator
+    separator.translatesAutoresizingMaskIntoConstraints = false
+    material.contentView.addSubview(separator)
+
+    configureButton(chapterButton, symbol: "list.number", label: "Chapters", selector: #selector(chaptersTapped))
+    configureButton(fontButton, symbol: "textformat.size", label: "Font size", selector: #selector(fontTapped))
+    configureButton(layoutButton, symbol: "arrow.up.arrow.down", label: "Reading layout", selector: #selector(layoutTapped))
+    configureButton(speechButton, symbol: "waveform", label: "Read aloud", selector: #selector(speechTapped))
+    configureButton(settingsButton, symbol: "slider.horizontal.3", label: "Reading settings", selector: #selector(settingsTapped))
+    let actions = UIStackView(arrangedSubviews: [
+      chapterButton, fontButton, layoutButton, speechButton, settingsButton
+    ])
+    actions.axis = .horizontal
+    actions.alignment = .center
+    actions.distribution = .fillEqually
+    actions.translatesAutoresizingMaskIntoConstraints = false
+    material.contentView.addSubview(actions)
+
+    caption.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    caption.textColor = .secondaryLabel
+    caption.textAlignment = .center
+    caption.translatesAutoresizingMaskIntoConstraints = false
+    material.contentView.addSubview(caption)
+
+    NSLayoutConstraint.activate([
+      progressRow.topAnchor.constraint(equalTo: material.contentView.topAnchor, constant: 6),
+      progressRow.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 7),
+      progressRow.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -7),
+      progressRow.heightAnchor.constraint(equalToConstant: 45),
+      separator.topAnchor.constraint(equalTo: progressRow.bottomAnchor, constant: 2),
+      separator.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 12),
+      separator.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -12),
+      separator.heightAnchor.constraint(equalToConstant: 0.5),
+      actions.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 1),
+      actions.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 10),
+      actions.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -10),
+      actions.heightAnchor.constraint(equalToConstant: 47),
+      caption.topAnchor.constraint(equalTo: actions.bottomAnchor, constant: 0),
+      caption.centerXAnchor.constraint(equalTo: material.contentView.centerXAnchor),
+      caption.bottomAnchor.constraint(lessThanOrEqualTo: material.contentView.bottomAnchor, constant: -4)
+    ])
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard init unsupported") }
+
+  private func configureButton(_ button: UIButton, symbol: String, label: String, selector: Selector) {
+    let configuration = UIImage.SymbolConfiguration(pointSize: 21, weight: .medium)
+    button.setImage(UIImage(systemName: symbol, withConfiguration: configuration), for: .normal)
+    button.tintColor = .label
+    button.accessibilityLabel = label
+    button.addTarget(self, action: selector, for: .touchUpInside)
+    button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+  }
+
+  func configure(hasPrevious: Bool, hasNext: Bool, mode: String, pageLayout: String, speaking: Bool) {
+    previous.isEnabled = hasPrevious
+    next.isEnabled = hasNext
+    let symbol = mode == "scroll" ? "arrow.up.arrow.down" :
+      pageLayout == "double" ? "book.closed" : "doc.text"
+    layoutButton.setImage(UIImage(systemName: symbol), for: .normal)
+    layoutButton.accessibilityValue = mode == "scroll" ? "Continuous scrolling" :
+      pageLayout == "double" ? "Double-page" : "Single-page"
+    speechButton.tintColor = speaking ? .systemBlue : .label
+    speechButton.accessibilityLabel = speaking ? "Stop reading aloud" : "Read aloud"
+  }
+
+  func updateProgress(value: Double, leading: String, trailing: String, caption: String?) {
+    if !slider.isTracking { slider.value = Float(min(max(value, 0), 1)) }
+    currentLabel.text = leading
+    endLabel.text = trailing
+    self.caption.text = caption
+    self.caption.isHidden = caption == nil
+  }
+
+  @objc private func previousTapped() { onPrevious?() }
+  @objc private func nextTapped() { onNext?() }
+  @objc private func chaptersTapped() { onChapters?() }
+  @objc private func fontTapped() { onFont?() }
+  @objc private func layoutTapped() { onLayout?() }
+  @objc private func speechTapped() { onSpeech?() }
+  @objc private func settingsTapped() { onSettings?() }
+}
+
+/// Font-size quick sheet from showNovelFontSizeBottomSheet: slider 8–40,
+/// preset choices 12/14/16/18/20/24/28 and reset to the original 14 px.
+private final class NovayomiFontSizeSheet: UIViewController {
+  var onSizeChanged: ((Int) -> Void)?
+  private let slider = UISlider()
+  private let valueLabel = UILabel()
+  private let sizes = [12, 14, 16, 18, 20, 24, 28]
+
+  init(fontSize: Int) {
+    super.init(nibName: nil, bundle: nil)
+    slider.minimumValue = 8
+    slider.maximumValue = 40
+    slider.value = Float(fontSize)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard init unsupported") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Font size"
+    view.backgroundColor = .systemGroupedBackground
+    navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done,
+      target: self, action: #selector(done))
+    slider.addTarget(self, action: #selector(sliderChanged), for: .valueChanged)
+    valueLabel.text = "\(Int(slider.value.rounded())) px"
+    valueLabel.textAlignment = .center
+    valueLabel.font = .preferredFont(forTextStyle: .headline)
+
+    let column = UIStackView()
+    column.axis = .vertical
+    column.spacing = 18
+    column.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(column)
+    let row = UIStackView(arrangedSubviews: [slider, valueLabel])
+    row.spacing = 12
+    row.alignment = .center
+    valueLabel.widthAnchor.constraint(equalToConstant: 62).isActive = true
+    column.addArrangedSubview(row)
+    let presets = UIStackView()
+    presets.axis = .horizontal
+    presets.distribution = .fillEqually
+    presets.spacing = 4
+    for size in sizes {
+      let button = UIButton(type: .system)
+      button.configuration = .tinted()
+      button.setTitle("\(size)", for: .normal)
+      button.tag = size
+      button.addTarget(self, action: #selector(presetTapped(_:)), for: .touchUpInside)
+      presets.addArrangedSubview(button)
+    }
+    column.addArrangedSubview(presets)
+    let reset = UIButton(type: .system)
+    reset.setTitle("Reset to 14 px", for: .normal)
+    reset.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
+    column.addArrangedSubview(reset)
+    NSLayoutConstraint.activate([
+      column.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18),
+      column.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -18),
+      column.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 22)
+    ])
+  }
+
+  private func setSize(_ size: Int) {
+    slider.value = Float(size)
+    valueLabel.text = "\(size) px"
+    onSizeChanged?(size)
+  }
+
+  @objc private func sliderChanged() { setSize(Int(slider.value.rounded())) }
+  @objc private func presetTapped(_ sender: UIButton) { setSize(sender.tag) }
+  @objc private func resetTapped() { setSize(14) }
+  @objc private func done() { dismiss(animated: true) }
 }
