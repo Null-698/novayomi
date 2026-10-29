@@ -308,13 +308,14 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
                       point: CGPoint) -> UIContextMenuConfiguration? {
     guard displayed.indices.contains(indexPath.item),
           let id = displayed[indexPath.item]["id"] as? Int else { return nil }
+    let name = displayed[indexPath.item]["name"] as? String ?? ""
     return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
       UIMenu(children: [
         UIAction(title: "Open novel", image: UIImage(systemName: "book")) { _ in
           self?.channel.invokeMethod("open", arguments: id)
         },
         UIAction(title: "Copy title", image: UIImage(systemName: "doc.on.doc")) { _ in
-          UIPasteboard.general.string = self?.displayed[indexPath.item]["name"] as? String
+          UIPasteboard.general.string = name
         }
       ])
     }
@@ -327,6 +328,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private let title = UILabel()
   private let author = UILabel()
   private let stack = UIStackView()
+  private let textStack = UIStackView()
   private var coverHeight: NSLayoutConstraint!
   private var coverWidth: NSLayoutConstraint!
   private var loadTask: URLSessionDataTask?
@@ -346,11 +348,14 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     author.numberOfLines = 1
     author.textColor = .secondaryLabel
     stack.axis = .vertical
-    stack.spacing = 3
+    stack.spacing = 4
     stack.translatesAutoresizingMaskIntoConstraints = false
+    textStack.axis = .vertical
+    textStack.spacing = 2
+    textStack.addArrangedSubview(title)
+    textStack.addArrangedSubview(author)
     stack.addArrangedSubview(cover)
-    stack.addArrangedSubview(title)
-    stack.addArrangedSubview(author)
+    stack.addArrangedSubview(textStack)
     contentView.addSubview(stack)
     coverHeight = cover.heightAnchor.constraint(equalToConstant: 170)
     coverWidth = cover.widthAnchor.constraint(equalToConstant: 60)
