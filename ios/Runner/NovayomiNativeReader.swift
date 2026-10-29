@@ -433,22 +433,96 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     present(navigation, animated: true)
   }
 
-  private func adjustFont(_ amount: Int) {
-    fontSize = min(36, max(10, fontSize + amount))
-    let previous = progressFraction()
-    onEvent?(["type":"fontSize", "value":fontSize])
-    webView.evaluateJavaScript("document.documentElement.style.setProperty('--reader-size', '" + String(fontSize) + "px')") { [weak self] _,_ in
-      self?.restoreProgress(previous)
+  @objc private func showSettings() {
+    let settings = NovayomiReadingSettingsSheet(
+      fontSize: fontSize,
+      lineHeight: lineHeight,
+      padding: chapter["padding"] as? Int ?? 16,
+      mode: readingMode,
+      background: safeString("background", fallback: "#292832"),
+      alignment: safeString("alignment", fallback: "left")
+    )
+    settings.onChange = { [weak self] key, value in
+      self?.applyReaderSetting(key: key, value: value)
+    }
+    settings.onSpeak = { [weak self] in self?.toggleSpeech() }
+    presentReaderSheet(settings)
+  }
+
+  private func applyReaderSetting(key: String, value: Any) {
+    switch key {
+    case "fontSize":
+      guard let size = value as? Int else { return }
+      setFontSize(size)
+    case "lineHeight":
+      guard let spacing = value as? Double else { return }
+      setLineHeight(spacing)
+    case "padding":
+      guard let inset = value as? Int else { return }
+      chapter["padding"] = inset
+      onEvent?(["type": "padding", "value": inset])
+      applyReaderCSS("document.getElementById('book').style.padding = '0 \(inset)px'")
+    case "mode":
+      guard let requested = value as? String, requested != readingMode else { return }
+      switchMode()
+    case "appearance":
+      guard let selected = value as? String else { return }
+      let palette: (String, String)
+      switch selected {
+      case "light": palette = ("#FFFFFF", "#202020")
+      case "sepia": palette = ("#F5ECD8", "#473829")
+      default: palette = ("#292832", "#CCCCCC")
+      }
+      chapter["background"] = palette.0
+      chapter["foreground"] = palette.1
+      onEvent?(["type": "background", "value": palette.0])
+      onEvent?(["type": "foreground", "value": palette.1])
+      view.backgroundColor = readerBackground()
+      webView.backgroundColor = readerBackground()
+      overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+      navigationController?.overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+      setNeedsStatusBarAppearanceUpdate()
+      applyReaderCSS("document.documentElement.style.backgroundColor = '\(palette.0)'; document.body.style.backgroundColor = '\(palette.0)'; document.body.style.color = '\(palette.1)'")
+    case "alignment":
+      guard let align = value as? String, ["left", "center", "right", "justify"].contains(align) else { return }
+      chapter["alignment"] = align
+      onEvent?(["type": "alignment", "value": align])
+      applyReaderCSS("document.getElementById('book').style.textAlign = '\(align)'")
+    default:
+      break
     }
   }
 
-  private func adjustLineHeight(_ amount: Double) {
-    lineHeight = min(2.6, max(1.0, (lineHeight * 10 + amount * 10).rounded() / 10))
-    let previous = progressFraction()
-    onEvent?(["type":"lineHeight", "value":lineHeight])
-    webView.evaluateJavaScript("document.documentElement.style.setProperty('--reader-line','" + String(lineHeight) + "')") { [weak self] _,_ in
-      self?.restoreProgress(previous)
+  private func applyReaderCSS(_ script: String) {
+    guard didInitialLoad else { return }
+    let position = progressFraction()
+    webView.evaluateJavaScript(script) { [weak self] _, _ in
+      guard let self, !self.webView.scrollView.isDragging,
+            !self.webView.scrollView.isDecelerating else { return }
+      self.restoreProgress(position)
     }
+  }
+
+  private func setFontSize(_ newSize: Int) {
+    fontSize = min(36, max(10, newSize))
+    chapter["fontSize"] = fontSize
+    onEvent?(["type": "fontSize", "value": fontSize])
+    applyReaderCSS("document.documentElement.style.setProperty('--reader-size', '\(fontSize)px')")
+  }
+
+  private func setLineHeight(_ newHeight: Double) {
+    lineHeight = min(2.6, max(1.0, (newHeight * 10).rounded() / 10))
+    chapter["lineHeight"] = lineHeight
+    onEvent?(["type": "lineHeight", "value": lineHeight])
+    applyReaderCSS("document.documentElement.style.setProperty('--reader-line', '\(lineHeight)')")
+  }
+
+  private func adjustFont(_ amount: Int) {
+    setFontSize(fontSize + amount)
+  }
+
+  private func adjustLineHeight(_ amount: Double) {
+    setLineHeight(lineHeight + amount)
   }
 
   private func switchMode() {
@@ -617,5 +691,168 @@ private final class NovayomiChapterSheet: UITableViewController, UISearchResults
     dismiss(animated: true) { [weak self] in self?.onSelect?(id) }
   }
 
+  @objc private func done() { dismiss(animated: true) }
+}
+
+
+/// Native reader preferences; this is a UIKit sheet, not a Flutter bottom
+/// panel. Changes are sent back to the existing Dart preferences providers.
+private final class NovayomiReadingSettingsSheet: UIViewController {
+  var onChange: ((String, Any) -> Void)?
+  var onSpeak: (() -> Void)?
+
+  private let fontSlider = UISlider()
+  private let lineSlider = UISlider()
+  private let marginSlider = UISlider()
+  private let fontValue = UILabel()
+  private let lineValue = UILabel()
+  private let marginValue = UILabel()
+  private let modeControl = UISegmentedControl(items: ["Scroll", "Pages"])
+  private let themeControl = UISegmentedControl(items: ["Dark", "Light", "Sepia"])
+  private let alignmentControl = UISegmentedControl(items: ["Left", "Justify", "Center"])
+  private let initialFont: Int
+  private let initialLine: Double
+  private let initialPadding: Int
+  private let initialMode: String
+  private let initialBackground: String
+  private let initialAlignment: String
+
+  init(fontSize: Int, lineHeight: Double, padding: Int, mode: String,
+       background: String, alignment: String) {
+    initialFont = fontSize
+    initialLine = lineHeight
+    initialPadding = padding
+    initialMode = mode
+    initialBackground = background
+    initialAlignment = alignment
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard init unsupported") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Reading Settings"
+    view.backgroundColor = .systemGroupedBackground
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .done, target: self, action: #selector(done))
+
+    let scroll = UIScrollView()
+    scroll.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(scroll)
+    let form = UIStackView()
+    form.axis = .vertical
+    form.spacing = 20
+    form.translatesAutoresizingMaskIntoConstraints = false
+    scroll.addSubview(form)
+    NSLayoutConstraint.activate([
+      scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      form.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 22),
+      form.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -22),
+      form.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 22),
+      form.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -36),
+      form.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -44)
+    ])
+
+    setupSlider(fontSlider, min: 10, max: 36, value: Float(initialFont),
+                selector: #selector(fontChanged(_:)))
+    setupSlider(lineSlider, min: 1, max: 2.6, value: Float(initialLine),
+                selector: #selector(lineChanged(_:)))
+    setupSlider(marginSlider, min: 6, max: 48, value: Float(initialPadding),
+                selector: #selector(marginChanged(_:)))
+    fontValue.text = "\(initialFont) pt"
+    lineValue.text = String(format: "%.1f×", initialLine)
+    marginValue.text = "\(initialPadding) pt"
+    form.addArrangedSubview(sliderSection("Text size", value: fontValue, control: fontSlider))
+    form.addArrangedSubview(sliderSection("Line spacing", value: lineValue, control: lineSlider))
+    form.addArrangedSubview(sliderSection("Page margins", value: marginValue, control: marginSlider))
+
+    modeControl.selectedSegmentIndex = initialMode == "pages" ? 1 : 0
+    modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+    form.addArrangedSubview(segmentSection("Reading mode", control: modeControl))
+
+    themeControl.selectedSegmentIndex = initialBackground.uppercased() == "#FFFFFF" ? 1
+      : initialBackground.uppercased() == "#F5ECD8" ? 2 : 0
+    themeControl.addTarget(self, action: #selector(themeChanged), for: .valueChanged)
+    form.addArrangedSubview(segmentSection("Page appearance", control: themeControl))
+
+    alignmentControl.selectedSegmentIndex = initialAlignment == "justify" ? 1
+      : initialAlignment == "center" ? 2 : 0
+    alignmentControl.addTarget(self, action: #selector(alignmentChanged), for: .valueChanged)
+    form.addArrangedSubview(segmentSection("Text alignment", control: alignmentControl))
+
+    let speak = UIButton(type: .system)
+    speak.configuration = .filled()
+    speak.setTitle("Read Aloud / Stop Reading", for: .normal)
+    speak.addTarget(self, action: #selector(speakTapped), for: .touchUpInside)
+    speak.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    form.addArrangedSubview(speak)
+  }
+
+  private func setupSlider(_ slider: UISlider, min: Float, max: Float,
+                           value: Float, selector: Selector) {
+    slider.minimumValue = min
+    slider.maximumValue = max
+    slider.value = value
+    slider.addTarget(self, action: selector, for: .valueChanged)
+    slider.isContinuous = false
+  }
+
+  private func sliderSection(_ title: String, value: UILabel, control: UISlider) -> UIView {
+    let header = UIStackView()
+    header.axis = .horizontal
+    let name = UILabel()
+    name.text = title
+    name.font = .preferredFont(forTextStyle: .subheadline)
+    value.textColor = .secondaryLabel
+    value.textAlignment = .right
+    header.addArrangedSubview(name)
+    header.addArrangedSubview(value)
+    let row = UIStackView(arrangedSubviews: [header, control])
+    row.axis = .vertical
+    row.spacing = 8
+    return row
+  }
+
+  private func segmentSection(_ title: String, control: UISegmentedControl) -> UIView {
+    let name = UILabel()
+    name.text = title
+    name.font = .preferredFont(forTextStyle: .subheadline)
+    let row = UIStackView(arrangedSubviews: [name, control])
+    row.axis = .vertical
+    row.spacing = 10
+    return row
+  }
+
+  @objc private func fontChanged(_ slider: UISlider) {
+    let size = Int(slider.value.rounded())
+    fontValue.text = "\(size) pt"
+    onChange?("fontSize", size)
+  }
+  @objc private func lineChanged(_ slider: UISlider) {
+    let value = (Double(slider.value) * 10).rounded() / 10
+    lineValue.text = String(format: "%.1f×", value)
+    onChange?("lineHeight", value)
+  }
+  @objc private func marginChanged(_ slider: UISlider) {
+    let value = Int(slider.value.rounded())
+    marginValue.text = "\(value) pt"
+    onChange?("padding", value)
+  }
+  @objc private func modeChanged() {
+    onChange?("mode", modeControl.selectedSegmentIndex == 1 ? "pages" : "scroll")
+  }
+  @objc private func themeChanged() {
+    let names = ["dark", "light", "sepia"]
+    onChange?("appearance", names[themeControl.selectedSegmentIndex])
+  }
+  @objc private func alignmentChanged() {
+    let values = ["left", "justify", "center"]
+    onChange?("alignment", values[alignmentControl.selectedSegmentIndex])
+  }
+  @objc private func speakTapped() { onSpeak?() }
   @objc private func done() { dismiss(animated: true) }
 }
