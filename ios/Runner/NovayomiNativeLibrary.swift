@@ -62,6 +62,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var isList = false
   private var sortIndex = 0
   private var gridSize = 0
+  private var displayMode = 0
   private var configuration: [String: Any] = [:]
   private weak var categoryManager: NovayomiLibraryCategoryManager?
 
@@ -305,6 +306,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     if let label = data["title"] as? String { heading.text = label }
     if let index = data["sortIndex"] as? Int { sortIndex = index }
     if let size = data["gridSize"] as? Int { gridSize = size }
+    if let index = data["displayIndex"] as? Int { displayMode = index }
     collection.collectionViewLayout.invalidateLayout()
     if let list = data["isList"] as? Bool {
       isList = list
@@ -510,6 +512,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let isContinue = collectionView === continueCollection
     let item = isContinue ? continueItems[indexPath.item] : displayed[indexPath.item]
     cell.configure(item: item, isList: !isContinue && isList,
+                   displayMode: isContinue ? 0 : displayMode,
                    selected: !isContinue && selectedIds.contains(item["id"] as? Int ?? -1))
     cell.onResume = { [weak self] in
       guard let id = item["id"] as? Int else { return }
@@ -638,7 +641,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       ? CGFloat(min(max(gridSize, 1), 7))
       : (width > 700 ? 6 : width > 450 ? 4 : 3)
     let itemWidth = max(65, floor((width - 36 - (columns - 1) * 10) / columns))
-    return CGSize(width: itemWidth, height: itemWidth * 1.51 + 36)
+    let labelHeight: CGFloat = displayMode == 0 ? 36 : 0
+    let coverHeight = displayMode == 1 ? itemWidth * 1.57 : itemWidth * 1.44
+    return CGSize(width: itemWidth, height: coverHeight + labelHeight + 8)
   }
 
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
@@ -676,7 +681,12 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private let cover = UIImageView()
   private let title = UILabel()
   private let author = UILabel()
-  private let badge = UILabel()
+  private let topLeftBadges = UIStackView()
+  private let localBadge = UILabel()
+  private let downloadedBadge = UILabel()
+  private let unreadBadge = UILabel()
+  private let languageBadge = UILabel()
+  private let sourceBadge = UILabel()
   private let readingProgress = UIProgressView(progressViewStyle: .bar)
   private let resume = UIButton(type: .system)
   var onResume: (() -> Void)?
@@ -686,6 +696,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private var coverWidth: NSLayoutConstraint!
   private var loadTask: URLSessionDataTask?
   private var represented = ""
+  private var currentDisplayMode = 0
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -696,14 +707,31 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.clipsToBounds = true
     cover.layer.cornerRadius = 8
     cover.backgroundColor = .secondarySystemGroupedBackground
-    badge.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-    badge.textColor = .label
-    badge.backgroundColor = .secondarySystemBackground
-    badge.layer.cornerRadius = 7
-    badge.clipsToBounds = true
-    badge.textAlignment = .center
-    badge.translatesAutoresizingMaskIntoConstraints = false
-    cover.addSubview(badge)
+    topLeftBadges.axis = .horizontal
+    topLeftBadges.alignment = .top
+    topLeftBadges.spacing = 3
+    topLeftBadges.translatesAutoresizingMaskIntoConstraints = false
+    for label in [localBadge, downloadedBadge, unreadBadge, languageBadge, sourceBadge] {
+      label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+      label.textAlignment = .center
+      label.textColor = .white
+      label.backgroundColor = UIColor.black.withAlphaComponent(0.72)
+      label.layer.cornerRadius = 6
+      label.clipsToBounds = true
+      label.heightAnchor.constraint(greaterThanOrEqualToConstant: 20).isActive = true
+      label.isHidden = true
+    }
+    downloadedBadge.backgroundColor = .systemTeal
+    unreadBadge.backgroundColor = .systemBlue
+    for label in [localBadge, downloadedBadge, unreadBadge] {
+      topLeftBadges.addArrangedSubview(label)
+    }
+    cover.addSubview(topLeftBadges)
+    languageBadge.translatesAutoresizingMaskIntoConstraints = false
+    sourceBadge.translatesAutoresizingMaskIntoConstraints = false
+    sourceBadge.lineBreakMode = .byTruncatingTail
+    cover.addSubview(languageBadge)
+    cover.addSubview(sourceBadge)
     resume.setImage(UIImage(systemName: "play.fill"), for: .normal)
     resume.tintColor = .white
     resume.backgroundColor = .systemBlue
@@ -721,10 +749,14 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
       readingProgress.trailingAnchor.constraint(equalTo: cover.trailingAnchor),
       readingProgress.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
       readingProgress.heightAnchor.constraint(equalToConstant: 3),
-      badge.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 5),
-      badge.topAnchor.constraint(equalTo: cover.topAnchor, constant: 5),
-      badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
-      badge.heightAnchor.constraint(equalToConstant: 24),
+      topLeftBadges.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 4),
+      topLeftBadges.topAnchor.constraint(equalTo: cover.topAnchor, constant: 4),
+      topLeftBadges.trailingAnchor.constraint(lessThanOrEqualTo: cover.trailingAnchor, constant: -4),
+      languageBadge.topAnchor.constraint(equalTo: cover.topAnchor, constant: 4),
+      languageBadge.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -4),
+      sourceBadge.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 4),
+      sourceBadge.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -7),
+      sourceBadge.widthAnchor.constraint(lessThanOrEqualTo: cover.widthAnchor, multiplier: 0.65),
       resume.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -5),
       resume.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -5),
       resume.widthAnchor.constraint(equalToConstant: 34),
@@ -767,15 +799,18 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     loadTask = nil
     represented = ""
     onResume = nil
-    badge.isHidden = true
+    for label in [localBadge, downloadedBadge, unreadBadge, languageBadge, sourceBadge] {
+      label.isHidden = true
+    }
     readingProgress.isHidden = true
     resume.isHidden = true
     cover.image = UIImage(systemName: "book.closed")
   }
 
-  func configure(item: [String: Any], isList: Bool, selected: Bool) {
+  func configure(item: [String: Any], isList: Bool, displayMode: Int, selected: Bool) {
     let id = item["id"] as? Int ?? -1
     represented = String(id)
+    currentDisplayMode = displayMode
     contentView.layer.borderWidth = selected ? 2 : 0
     contentView.layer.borderColor = UIColor.systemBlue.cgColor
     contentView.layer.cornerRadius = 9
@@ -783,8 +818,22 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     author.text = item["author"] as? String ?? ""
     let unread = item["unreadCount"] as? Int ?? 0
     let downloaded = item["downloadedCount"] as? Int ?? 0
-    badge.text = unread > 0 ? "  \(unread)  " : "  \(downloaded)  "
-    badge.isHidden = unread == 0 && downloaded == 0
+    let isLocal = item["isLocal"] as? Bool ?? false
+    localBadge.isHidden = !isLocal || !(item["localBadge"] as? Bool ?? false)
+    localBadge.text = " Local "
+    downloadedBadge.isHidden = downloaded == 0
+    downloadedBadge.text = " ↓\(downloaded) "
+    unreadBadge.isHidden = unread == 0
+    unreadBadge.text = " \(unread) "
+    let language = (item["language"] as? String ?? "").uppercased()
+    languageBadge.isHidden = language.isEmpty || !(item["languageBadge"] as? Bool ?? false)
+    languageBadge.text = " \(language) "
+    let source = item["source"] as? String ?? ""
+    sourceBadge.isHidden = source.isEmpty || !(item["sourceBadge"] as? Bool ?? false)
+    sourceBadge.text = " \(source) "
+    contentView.isAccessibilityElement = true
+    contentView.accessibilityLabel = "\(title.text ?? "Novel"), \(unread) unread, \(downloaded) downloaded"
+    contentView.accessibilityTraits = .button
     resume.isHidden = !(item["showContinue"] as? Bool ?? false)
     if let progress = item["progress"] as? Double {
       readingProgress.isHidden = false
@@ -794,6 +843,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     }
     cover.image = UIImage(systemName: "book.closed")
 
+    textStack.isHidden = !isList && (displayMode == 1 || displayMode == 2)
     if isList {
       coverHeight.constant = 78
       coverWidth.isActive = true
@@ -801,7 +851,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
       stack.alignment = .center
     } else {
       coverWidth.isActive = false
-      coverHeight.constant = max(80, bounds.width * 1.44)
+      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.44))
       stack.axis = .vertical
       stack.alignment = .fill
     }
@@ -839,7 +889,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   override func layoutSubviews() {
     super.layoutSubviews()
     if stack.axis == .vertical {
-      coverHeight.constant = max(80, bounds.width * 1.44)
+      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.44))
     }
   }
 }
