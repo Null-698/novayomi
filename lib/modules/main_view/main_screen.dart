@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mangayomi/modules/main_view/controllers/main_screen_lifecycle_mixin.dart';
@@ -245,7 +246,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       ),
                     Flexible(
                       child: Scaffold(
-                        extendBody: useFloatingNav,
+                        extendBody: useFloatingNav || defaultTargetPlatform == TargetPlatform.iOS,
                         body: NotificationListener<ScrollNotification>(
                           onNotification: (notification) => _onPageScroll(
                             notification,

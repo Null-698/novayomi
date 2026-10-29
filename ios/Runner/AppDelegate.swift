@@ -35,6 +35,12 @@ import UniformTypeIdentifiers
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NovayomiNativeBar") {
+      registrar.register(
+        NovayomiNativeBarFactory(messenger: registrar.messenger()),
+        withId: "novayomi/native-bar"
+      )
+    }
     let messenger = engineBridge.applicationRegistrar.messenger()
 
     let backgroundTaskChannel = FlutterMethodChannel(

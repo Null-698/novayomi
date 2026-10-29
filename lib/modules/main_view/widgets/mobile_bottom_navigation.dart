@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:shiori/shiori.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -39,6 +41,34 @@ class MainMobileBottomNavigation extends StatelessWidget {
     final height = _getBottomNavigationHeight(isLongPressed, location);
     if (height == 0) {
       return const SizedBox.shrink();
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final items = buildNavigationWidgetsMobile(ref, dest, context);
+      return SizedBox(
+        width: context.width(1),
+        height: 58 + MediaQuery.viewPaddingOf(context).bottom,
+        child: NativeIosBar(
+          kind: 'tabs',
+          data: <String, Object?>{
+            'selected': currentIndex,
+            'items': [
+              for (var i = 0; i < dest.length; i++)
+                <String, String>{
+                  'title': items[i] is NavigationDestination
+                      ? (items[i] as NavigationDestination).label
+                      : dest[i],
+                  'symbol': nativeNavigationSymbol(dest[i]),
+                },
+            ],
+          },
+          onSelected: (index) {
+            if (index >= 0 && index < dest.length) {
+              onDestinationSelected(dest[index]);
+            }
+          },
+        ),
+      );
     }
 
     if (useFloatingNav) {
