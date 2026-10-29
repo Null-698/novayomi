@@ -14,6 +14,7 @@ import 'package:mangayomi/models/video.dart';
 import 'package:mangayomi/repositories/settings_repository.dart';
 import 'package:mangayomi/services/http/cf_proxy_store.dart';
 import 'package:mangayomi/services/http/m_client.dart';
+import 'package:mangayomi/utils/constant.dart';
 
 import '../../models/manga.dart';
 import '../interface.dart';
@@ -360,11 +361,14 @@ class MihonExtensionService implements ExtensionService {
   }
 
   Map<String, String> getCookie() {
-    final userAgent = settingsRepository.current.userAgent;
+    final rawUa = settingsRepository.current.userAgent?.trim();
+    final userAgent =
+        (rawUa != null && rawUa.isNotEmpty) ? rawUa : defaultUserAgent;
     final cfProxyUrl = CfProxyStore.url.trim();
     return {
-      ...MClient.getCookiesPref(source.baseUrl!),
-      'user-agent': ?userAgent,
+      if (source.baseUrl != null && source.baseUrl!.isNotEmpty)
+        ...MClient.getCookiesPref(source.baseUrl!),
+      'user-agent': userAgent,
       // Which source of the extension this call is for. The id sent alongside
       // it is a Dart hashCode of the original one (see ExtensionStoreService),
       // which the server cannot reproduce on the JVM, so an extension holding
