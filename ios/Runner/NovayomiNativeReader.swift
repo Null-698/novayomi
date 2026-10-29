@@ -59,10 +59,12 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     webView.scrollView.keyboardDismissMode = .interactive
     if #available(iOS 26.0, *) {
-      // The subtle, progressive edge effect is provided by UIKit itself.
-      // It is NOT a full-width blur overlay or a manually masked gradient.
+      // The gradual scroll-edge fade belongs to immersive mode. While the
+      // controls are visible, UINavigationController owns its native treatment.
       webView.scrollView.topEdgeEffect.style = .soft
       webView.scrollView.bottomEdgeEffect.style = .soft
+      webView.scrollView.topEdgeEffect.isHidden = chromeVisible
+      webView.scrollView.bottomEdgeEffect.isHidden = chromeVisible
     }
     webView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(webView)
@@ -109,14 +111,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     navigationController?.setNavigationBarHidden(!chromeVisible, animated: false)
     navigationController?.setToolbarHidden(!chromeVisible, animated: false)
     navigationController?.navigationBar.prefersLargeTitles = false
-    // Remove the rectangular bar haze. UIKit still owns the individual
-    // native Liquid Glass bar-button surfaces on iOS 26+.
-    let clear = UINavigationBarAppearance()
-    clear.configureWithTransparentBackground()
-    navigationController?.navigationBar.standardAppearance = clear
-    navigationController?.navigationBar.scrollEdgeAppearance = clear
-    navigationController?.navigationBar.compactAppearance = clear
-    navigationController?.navigationBar.compactScrollEdgeAppearance = clear
+    // No custom navigation-bar background. iOS 26+ supplies native
+    // Liquid Glass and its gradual bar-edge treatment automatically.
     navigationController?.navigationBar.tintColor = .label
     navigationController?.toolbar.isTranslucent = true
   }
@@ -138,6 +134,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   }
 
   override var prefersStatusBarHidden: Bool { !chromeVisible }
+  override var prefersHomeIndicatorAutoHidden: Bool { !chromeVisible }
   override var preferredStatusBarStyle: UIStatusBarStyle { isDarkBook ? .lightContent : .darkContent }
 
   private var isDarkBook: Bool {
@@ -342,7 +339,26 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     titles.axis = .vertical
     titles.distribution = .fill
     titles.spacing = 1
-    navigationItem.titleView = titles
+    // Keep the two-line title readable without a rectangular blur strip.
+    // This is genuine UIKit glass, respecting Clear/Frosted system settings.
+    let titleGlass: UIVisualEffectView
+    if #available(iOS 26.0, *) {
+      titleGlass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      titleGlass.cornerConfiguration = .capsule()
+    } else {
+      titleGlass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+      titleGlass.layer.cornerRadius = 21
+      titleGlass.clipsToBounds = true
+    }
+    titleGlass.frame = CGRect(x: 0, y: 0, width: 205, height: 44)
+    titles.translatesAutoresizingMaskIntoConstraints = false
+    titleGlass.contentView.addSubview(titles)
+    NSLayoutConstraint.activate([
+      titles.leadingAnchor.constraint(equalTo: titleGlass.contentView.leadingAnchor, constant: 10),
+      titles.trailingAnchor.constraint(equalTo: titleGlass.contentView.trailingAnchor, constant: -10),
+      titles.centerYAnchor.constraint(equalTo: titleGlass.contentView.centerYAnchor)
+    ])
+    navigationItem.titleView = titleGlass
 
     navigationItem.leftBarButtonItem = UIBarButtonItem(
       image: UIImage(systemName: "chevron.backward"),
@@ -352,8 +368,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       image: UIImage(systemName: bookmarked ? "bookmark.fill" : "bookmark"),
       style: .plain, target: self, action: #selector(toggleBookmark))
     bookmarkItem.accessibilityLabel = bookmarked ? "Remove bookmark" : "Bookmark"
-    let menuItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: makeMenu())
-    navigationItem.rightBarButtonItems = [menuItem, bookmarkItem]
+    navigationItem.rightBarButtonItems = [bookmarkItem]
 
     let previous = UIBarButtonItem(
       image: UIImage(systemName: "backward.end.fill"), style: .plain,
@@ -374,13 +389,18 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     next.isEnabled = chapter["hasNext"] as? Bool ?? false
     next.accessibilityLabel = "Next chapter"
     progressControl.isEnabled = true
-    progressControl.frame.size.width = 112
+    progressControl.frame.size.width = 86
+    let overflow = UIBarButtonItem(
+      image: UIImage(systemName: "ellipsis.circle"),
+      menu: makeMenu()
+    )
+    overflow.accessibilityLabel = "More reader actions"
     toolbarItems = [
       previous, chapterList,
       UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
       progressItem,
       UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-      settings, next
+      settings, overflow, next
     ]
     navigationController?.toolbar.tintColor = .label
   }
@@ -565,11 +585,13 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     navigationController?.setNavigationBarHidden(!visible, animated: true)
     navigationController?.setToolbarHidden(!visible, animated: true)
     if #available(iOS 26.0, *) {
-      webView.scrollView.topEdgeEffect.isHidden = !visible
-      webView.scrollView.bottomEdgeEffect.isHidden = !visible
+      webView.scrollView.topEdgeEffect.isHidden = visible
+      webView.scrollView.bottomEdgeEffect.isHidden = visible
     }
     navigationController?.setNeedsStatusBarAppearanceUpdate()
     setNeedsStatusBarAppearanceUpdate()
+    navigationController?.setNeedsUpdateOfHomeIndicatorAutoHidden()
+    setNeedsUpdateOfHomeIndicatorAutoHidden()
     // No scroll inset changes or progress restoration while chrome animates.
   }
 
@@ -865,4 +887,13 @@ private final class NovayomiReadingSettingsSheet: UIViewController {
   }
   @objc private func speakTapped() { onSpeak?() }
   @objc private func done() { dismiss(animated: true) }
+}
+
+
+/// The UIKit reader is a full-screen modal, so the navigation controller
+/// must forward home-indicator/status-bar preferences to its reader child.
+final class NovayomiReaderNavigationController: UINavigationController {
+  override var childForHomeIndicatorAutoHidden: UIViewController? { topViewController }
+  override var childForStatusBarHidden: UIViewController? { topViewController }
+  override var childForStatusBarStyle: UIViewController? { topViewController }
 }
