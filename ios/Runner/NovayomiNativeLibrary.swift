@@ -44,6 +44,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var selectionHeight: NSLayoutConstraint!
   private var collectionBottom: NSLayoutConstraint!
   private let selectedCount = UILabel()
+  private let emptyBackground = UIView()
+  private let emptySymbol = UIImageView(image: UIImage(systemName: "books.vertical"))
+  private let emptyTitle = UILabel()
+  private let emptyMessage = UILabel()
+  private let emptyAction = UIButton(type: .system)
   private var selectedIds = Set<Int>()
   private let collection: UICollectionView
   private let continueHeading = UILabel()
@@ -160,6 +165,38 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     refresh.addTarget(self, action: #selector(refreshLibrary), for: .valueChanged)
     collection.refreshControl = refresh
     root.addSubview(collection)
+
+    // UIKit-native empty results, not an inert blank collection.
+    emptySymbol.tintColor = .tertiaryLabel
+    emptySymbol.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 46)
+    emptySymbol.contentMode = .scaleAspectFit
+    emptyTitle.font = .preferredFont(forTextStyle: .title3)
+    emptyTitle.textAlignment = .center
+    emptyTitle.adjustsFontForContentSizeCategory = true
+    emptyMessage.font = .preferredFont(forTextStyle: .subheadline)
+    emptyMessage.textColor = .secondaryLabel
+    emptyMessage.numberOfLines = 0
+    emptyMessage.textAlignment = .center
+    emptyMessage.adjustsFontForContentSizeCategory = true
+    emptyAction.configuration = .filled()
+    emptyAction.addTarget(self, action: #selector(emptyActionTapped), for: .touchUpInside)
+    let emptyColumn = UIStackView(arrangedSubviews: [
+      emptySymbol, emptyTitle, emptyMessage, emptyAction
+    ])
+    emptyColumn.axis = .vertical
+    emptyColumn.alignment = .center
+    emptyColumn.spacing = 12
+    emptyColumn.translatesAutoresizingMaskIntoConstraints = false
+    emptyBackground.addSubview(emptyColumn)
+    NSLayoutConstraint.activate([
+      emptySymbol.heightAnchor.constraint(equalToConstant: 56),
+      emptyColumn.centerXAnchor.constraint(equalTo: emptyBackground.centerXAnchor),
+      emptyColumn.centerYAnchor.constraint(equalTo: emptyBackground.centerYAnchor, constant: -24),
+      emptyColumn.leadingAnchor.constraint(greaterThanOrEqualTo: emptyBackground.leadingAnchor, constant: 30),
+      emptyColumn.trailingAnchor.constraint(lessThanOrEqualTo: emptyBackground.trailingAnchor, constant: -30),
+      emptyColumn.widthAnchor.constraint(lessThanOrEqualToConstant: 300)
+    ])
+    collection.backgroundView = emptyBackground
 
     continueHeading.text = "Continue Reading"
     continueHeading.font = .preferredFont(forTextStyle: .headline)
@@ -512,6 +549,18 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         rhs["name"] as? String ?? "") == .orderedAscending
     }
     total.text = "\(displayed.count) novels"
+    if displayed.isEmpty {
+      if entries.isEmpty {
+        emptyTitle.text = "Your Novel Library is empty"
+        emptyMessage.text = "Browse sources or import an EPUB to get started."
+        emptyAction.setTitle("Browse novels", for: .normal)
+      } else {
+        emptyTitle.text = "No matching novels"
+        emptyMessage.text = "Try another search or change your Library filters."
+        emptyAction.setTitle("Clear filters and search", for: .normal)
+      }
+    }
+    emptyBackground.isHidden = !displayed.isEmpty
     collection.reloadData()
   }
 
@@ -561,6 +610,21 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     guard var presenting = root.window?.rootViewController else { return }
     while let next = presenting.presentedViewController { presenting = next }
     presenting.present(navigation, animated: true)
+  }
+
+  @objc private func emptyActionTapped() {
+    if entries.isEmpty {
+      channel.invokeMethod("browse", arguments: nil)
+      return
+    }
+    search.text = ""
+    query = ""
+    selectedCategory = nil
+    onlyUncategorized = false
+    search.selectedScopeButtonIndex = 1
+    rebuildCategories()
+    filterAndReload()
+    saveViewState()
   }
 
   @objc private func toggleLayout() {
