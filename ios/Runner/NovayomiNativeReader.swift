@@ -1456,7 +1456,14 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     onChange?("pageLayout", layouts[pageControl.selectedSegmentIndex])
   }
   @objc private func themeChanged() {
-    onChange?("appearance", ["dark", "light", "black", "sepia"][themeControl.selectedSegmentIndex])
+    let index = themeControl.selectedSegmentIndex
+    guard (0...3).contains(index) else { return }
+    let backgrounds = ["#292832", "#FFFFFF", "#000000", "#F5E6D3"]
+    let foregrounds = ["#CCCCCC", "#000000", "#FFFFFF", "#5F4B32"]
+    backgroundHex = backgrounds[index]
+    foregroundHex = foregrounds[index]
+    refreshColorLabels()
+    onChange?("appearance", ["dark", "light", "black", "sepia"][index])
   }
   @objc private func alignmentChanged() {
     onChange?("alignment", ["left", "center", "right", "justify"][alignmentControl.selectedSegmentIndex])
@@ -1516,6 +1523,8 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
                      Int((blue * 255).rounded()))
     if colorTarget == "background" { backgroundHex = hex }
     else { foregroundHex = hex }
+    themeControl.selectedSegmentIndex = UISegmentedControl.noSegment
+    updateThemeSelection()
     refreshColorLabels()
     onChange?(colorTarget, hex)
   }
