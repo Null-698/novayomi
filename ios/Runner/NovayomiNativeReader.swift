@@ -1357,7 +1357,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     heading.font = .preferredFont(forTextStyle: .subheadline)
     heading.textColor = .label
     let accent = UIView()
-    accent.backgroundColor = .tintColor
+    accent.backgroundColor = view.tintColor
     accent.layer.cornerRadius = 2
     accent.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
