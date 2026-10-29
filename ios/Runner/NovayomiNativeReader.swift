@@ -345,6 +345,18 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     return true
   }
 
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    // A tap on a native chapter, slider, or settings control must never
+    // toggle immersive mode at the same time.
+    if gestureRecognizer is UITapGestureRecognizer {
+      if !readerControls.isHidden && readerControls.bounds.contains(touch.location(in: readerControls)) {
+        return false
+      }
+      if touch.view is UIControl { return false }
+    }
+    return true
+  }
+
   @objc private func handleBackSwipe(_ gesture: UIScreenEdgePanGestureRecognizer) {
     guard gesture.state == .ended else { return }
     if gesture.translation(in: view).x > 75 {
