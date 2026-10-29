@@ -53,13 +53,23 @@ Implemented in the staged native Library:
   current CategoryRepository and category-deletion sync notification.
 - Native alerts for Dart repository/import errors, instead of silently
   abandoning an operation.
+- Independent "Remove from Library" and "Delete downloaded chapters" switches
+  in a native sheet. Both Flutter and UIKit now call the same original Dart
+  file/Isar cleanup implementation. Local EPUBs receive a permanent-file
+  deletion warning; downloaded chapters remain re-downloadable.
+- Independent native badges for local sources, downloaded/unread counts,
+  language and source, respecting existing persisted display preferences.
+  Comfortable and cover-only grids hide labels as in the original UI.
+- Native long-press selection, Select All and Invert Selection controls.
+- Session-only restoration of search text, filter scope, category and list
+  scroll position across tab reconstruction; no extra persistent store.
+- Native empty and no-results states, with Browse and clear-filter actions.
 
 **Still required before the default route can switch:**
-- Full migration and downloaded-file deletion actions with native
-  confirmation UI while preserving repository/download cleanup rules.
-- Display-specific badges and cover-style parity across all grid modes.
-- Search, selected category, shelf and scroll-position restoration across
-  route/tab changes; error and empty-state polish.
+- Verify and polish display-style parity across all supported device sizes;
+  refine the shelf to scroll naturally with the library like Flutter.
+- Ensure the native migration workflow matches any available original
+  source-migration actions before exposing it.
 - iOS build, real-device performance, VoiceOver and large-type testing.
 - Native novel details and remaining tab screens as later Phase 2 stages.
 Do not promote the preview until these gates pass.
