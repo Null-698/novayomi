@@ -11,6 +11,8 @@ import 'package:mangayomi/modules/library/providers/library_filter_provider.dart
 import 'package:mangayomi/modules/library/providers/library_state_provider.dart';
 import 'package:mangayomi/modules/library/widgets/library_entry_utils.dart';
 import 'package:mangayomi/modules/library/widgets/library_update_runner.dart';
+import 'package:mangayomi/modules/library/widgets/continue_shelf.dart';
+import 'package:mangayomi/modules/library/providers/library_source_badge_provider.dart';
 import 'package:mangayomi/modules/more/categories/providers/isar_providers.dart';
 import 'package:mangayomi/modules/more/providers/downloaded_only_state_provider.dart';
 import 'package:mangayomi/utils/constant.dart';
@@ -83,6 +85,93 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
         ).notifier).setLibraryDisplayType(
           list ? DisplayType.list : DisplayType.compactGrid,
         );
+      case 'display':
+        final index = call.arguments;
+        final settings = _settings;
+        if (index is! int || settings == null ||
+            index < 0 || index >= DisplayType.values.length) return;
+        ref.read(libraryDisplayTypeStateProvider(
+          itemType: ItemType.novel,
+          settings: settings,
+        ).notifier).setLibraryDisplayType(DisplayType.values[index]);
+      case 'filter':
+        final args = call.arguments;
+        final settings = _settings;
+        if (args is! Map || settings == null) return;
+        final key = args['key'] as String?;
+        if (key == null) return;
+        switch (key) {
+          case 'downloaded':
+            ref.read(mangaFilterDownloadedStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+          case 'unread':
+            ref.read(mangaFilterUnreadStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+          case 'started':
+            ref.read(mangaFilterStartedStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+          case 'bookmarked':
+            ref.read(mangaFilterBookmarkedStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+          case 'completed':
+            ref.read(mangaFilterCompletedStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+          case 'tracking':
+            ref.read(mangaFilterTrackingStateProvider(
+              itemType: ItemType.novel, mangaList: _allEntries, settings: settings,
+            ).notifier).update();
+        }
+      case 'sources':
+        final args = call.arguments;
+        final settings = _settings;
+        if (args is! List || settings == null) return;
+        ref.read(mangaFilterSourceStateProvider(
+          mangaList: _allEntries,
+          itemType: ItemType.novel,
+          settings: settings,
+        ).notifier).set(args.whereType<String>().toList());
+      case 'displayToggle':
+        final args = call.arguments;
+        final settings = _settings;
+        if (args is! Map || settings == null) return;
+        final key = args['key'] as String?;
+        final enabled = args['value'] as bool?;
+        if (key == null || enabled == null) return;
+        switch (key) {
+          case 'showCategories':
+            ref.read(libraryShowCategoryTabsStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'showCounts':
+            ref.read(libraryShowNumbersOfItemsStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'downloadBadges':
+            ref.read(libraryDownloadedChaptersStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'showLanguage':
+            ref.read(libraryLanguageStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'showSource':
+            ref.read(librarySourceBadgeProvider.notifier).set(enabled);
+          case 'showLocal':
+            ref.read(libraryLocalSourceStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'continueButton':
+            ref.read(libraryShowContinueReadingButtonStateProvider(
+              itemType: ItemType.novel, settings: settings,
+            ).notifier).set(enabled);
+          case 'continueShelf':
+            ref.read(continueShelfProvider.notifier).set(enabled);
+        }
       case 'refresh':
         try {
           await updateLibrary(
@@ -177,6 +266,29 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
       mangaList: books, itemType: ItemType.novel, settings: settings,
     )).$2;
     final downloadedOnly = ref.watch(downloadedOnlyStateProvider);
+    final showCategories = ref.watch(libraryShowCategoryTabsStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final showCounts = ref.watch(libraryShowNumbersOfItemsStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final downloadBadges = ref.watch(libraryDownloadedChaptersStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final languageBadges = ref.watch(libraryLanguageStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final localBadges = ref.watch(libraryLocalSourceStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final sourceBadges = ref.watch(librarySourceBadgeProvider);
+    final continueButtons = ref.watch(libraryShowContinueReadingButtonStateProvider(
+      itemType: ItemType.novel, settings: settings,
+    ));
+    final continueShelf = ref.watch(continueShelfProvider);
+    final availableSources = ref.watch(mangaFilterSourceStateProvider(
+      mangaList: books, itemType: ItemType.novel, settings: settings,
+    )).$1;
     final visible = ref.watch(filteredLibraryMangaProvider(
       data: books,
       downloadFilterType: download,
@@ -203,7 +315,29 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           },
       ],
       'sortIndex': sort.index ?? 0,
+      'sortReverse': sort.reverse ?? false,
+      'displayIndex': display.index,
       'isList': display == DisplayType.list,
+      'filters': <String, int>{
+        'downloaded': download,
+        'unread': unread,
+        'started': started,
+        'bookmarked': bookmarked,
+        'completed': completed,
+        'tracking': tracking,
+      },
+      'sources': availableSources,
+      'selectedSources': sources,
+      'displaySettings': <String, bool>{
+        'showCategories': showCategories,
+        'showCounts': showCounts,
+        'downloadBadges': downloadBadges,
+        'showLanguage': languageBadges,
+        'showSource': sourceBadges,
+        'showLocal': localBadges,
+        'continueButton': continueButtons,
+        'continueShelf': continueShelf,
+      },
     };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _sendUpdate();
