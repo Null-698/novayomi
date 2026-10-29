@@ -16,6 +16,7 @@ import 'package:mangayomi/modules/library/providers/library_source_badge_provide
 import 'package:mangayomi/modules/more/categories/providers/isar_providers.dart';
 import 'package:mangayomi/modules/more/providers/downloaded_only_state_provider.dart';
 import 'package:mangayomi/utils/constant.dart';
+import 'package:mangayomi/repositories/manga_repository.dart';
 import 'package:mangayomi/utils/headers.dart';
 
 /// Phase 2.1: UIKit Library surface backed exclusively by existing providers.
@@ -172,6 +173,42 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           case 'continueShelf':
             ref.read(continueShelfProvider.notifier).set(enabled);
         }
+      case 'batch':
+        final args = call.arguments;
+        if (args is! Map) return;
+        final ids = (args['ids'] as List?)?.whereType<int>().toSet() ?? <int>{};
+        if (ids.isEmpty) return;
+        final kind = args['kind'] as String?;
+        switch (kind) {
+          case 'markRead':
+          case 'markUnread':
+            ref.read(mangasSetIsReadStateProvider(
+              mangaIds: ids, markAsRead: kind == 'markRead',
+            ).notifier).set();
+          case 'setCategories':
+            final categories = (args['categories'] as List?)
+                    ?.whereType<int>().toList() ?? <int>[];
+            final timestamp = DateTime.now().millisecondsSinceEpoch;
+            final changed = <Manga>[];
+            for (final id in ids) {
+              final manga = mangaRepository.findById(id);
+              if (manga == null || manga.itemType != ItemType.novel) continue;
+              manga.categories = categories;
+              manga.updatedAt = timestamp;
+              changed.add(manga);
+            }
+            if (changed.isNotEmpty) await mangaRepository.putAll(changed);
+          case 'removeFromLibrary':
+            for (final id in ids) {
+              final manga = mangaRepository.findById(id);
+              if (manga != null && manga.itemType == ItemType.novel) {
+                await mangaRepository.removeFromLibrary(manga);
+              }
+            }
+        }
+        ref.invalidate(getAllMangaStreamProvider(
+          categoryId: null, itemType: ItemType.novel,
+        ));
       case 'refresh':
         try {
           await updateLibrary(
