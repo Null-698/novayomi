@@ -35,6 +35,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let categoryScroll = UIScrollView()
   private let categoryStack = UIStackView()
   private let sortButton = UIButton(type: .system)
+  private let preferencesButton = UIButton(type: .system)
   private let layoutButton = UIButton(type: .system)
   private let refresh = UIRefreshControl()
   private let collection: UICollectionView
@@ -46,6 +47,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var query = ""
   private var isList = false
   private var sortIndex = 0
+  private var configuration: [String: Any] = [:]
 
   init(frame: CGRect, identifier: Int64, messenger: FlutterBinaryMessenger,
        data: [String: Any]) {
@@ -68,6 +70,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     sortButton.setImage(UIImage(systemName: "line.3.horizontal.decrease"), for: .normal)
     sortButton.accessibilityLabel = "Sort library"
     sortButton.showsMenuAsPrimaryAction = true
+    preferencesButton.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+    preferencesButton.accessibilityLabel = "Library filters and display settings"
+    preferencesButton.addTarget(self, action: #selector(openPreferences), for: .touchUpInside)
     layoutButton.setImage(UIImage(systemName: "square.grid.2x2"), for: .normal)
     layoutButton.accessibilityLabel = "Change layout"
     layoutButton.addTarget(self, action: #selector(toggleLayout), for: .touchUpInside)
@@ -77,7 +82,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     labels.alignment = .leading
     labels.spacing = 1
     let header = UIStackView(arrangedSubviews: [
-      labels, UIView(), sortButton, layoutButton
+      labels, UIView(), preferencesButton, sortButton, layoutButton
     ])
     header.axis = .horizontal
     header.alignment = .center
@@ -85,6 +90,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     header.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(header)
     NSLayoutConstraint.activate([
+      preferencesButton.widthAnchor.constraint(equalToConstant: 44),
+      preferencesButton.heightAnchor.constraint(equalToConstant: 44),
       sortButton.widthAnchor.constraint(equalToConstant: 44),
       sortButton.heightAnchor.constraint(equalToConstant: 44),
       layoutButton.widthAnchor.constraint(equalToConstant: 44),
@@ -161,6 +168,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   func view() -> UIView { root }
 
   private func apply(_ data: [String: Any]) {
+    configuration = data
     if let list = data["items"] as? [[String: Any]] { entries = list }
     if let list = data["categories"] as? [[String: Any]] {
       categoryItems = list
@@ -254,6 +262,21 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
     searchBar.resignFirstResponder()
+  }
+
+  @objc private func openPreferences() {
+    let controller = NovayomiLibraryPreferencesSheet(data: configuration) { [weak self] method, argument in
+      self?.channel.invokeMethod(method, arguments: argument)
+    }
+    let navigation = UINavigationController(rootViewController: controller)
+    navigation.modalPresentationStyle = .pageSheet
+    if let sheet = navigation.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+    }
+    guard var presenting = root.window?.rootViewController else { return }
+    while let next = presenting.presentedViewController { presenting = next }
+    presenting.present(navigation, animated: true)
   }
 
   @objc private func toggleLayout() {
@@ -432,5 +455,169 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     if stack.axis == .vertical {
       coverHeight.constant = max(80, bounds.width * 1.44)
     }
+  }
+}
+
+
+/// Native library preferences matching the original Flutter
+/// Filter / Sort / Display sheet. All persistence remains in Dart providers.
+private final class NovayomiLibraryPreferencesSheet: UITableViewController {
+  private let tabs = UISegmentedControl(items: ["Filter", "Sort", "Display"])
+  private let onAction: (String, Any) -> Void
+  private var filters: [String: Int]
+  private var settings: [String: Bool]
+  private var sources: [String]
+  private var selectedSources: Set<String>
+  private var sortIndex: Int
+  private var sortReverse: Bool
+  private var displayIndex: Int
+
+  private let filterItems: [(String, String)] = [
+    ("downloaded", "Downloaded"),
+    ("unread", "Unread"),
+    ("started", "Started reading"),
+    ("bookmarked", "Bookmarked chapters"),
+    ("completed", "Completed"),
+    ("tracking", "Tracking")
+  ]
+  private let sortItems = [
+    "Title", "Last read", "Last update check", "Unread chapters",
+    "Total chapters", "Latest chapter", "Date added"
+  ]
+  private let displayItems = [
+    "Compact grid", "Comfortable grid", "Cover-only grid", "List"
+  ]
+  private let toggles: [(String, String)] = [
+    ("showCategories", "Show category tabs"),
+    ("showCounts", "Show item counts"),
+    ("downloadBadges", "Downloaded chapter badges"),
+    ("showLanguage", "Language badges"),
+    ("showSource", "Source badges"),
+    ("showLocal", "Local source badges"),
+    ("continueButton", "Continue-reading buttons"),
+    ("continueShelf", "Continue-reading shelf")
+  ]
+
+  init(data: [String: Any], onAction: @escaping (String, Any) -> Void) {
+    self.onAction = onAction
+    filters = data["filters"] as? [String: Int] ?? [:]
+    settings = data["displaySettings"] as? [String: Bool] ?? [:]
+    sources = data["sources"] as? [String] ?? []
+    selectedSources = Set(data["selectedSources"] as? [String] ?? [])
+    sortIndex = data["sortIndex"] as? Int ?? 0
+    sortReverse = data["sortReverse"] as? Bool ?? false
+    displayIndex = data["displayIndex"] as? Int ?? 0
+    super.init(style: .insetGrouped)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Not created from storyboard") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Library settings"
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .done, target: self, action: #selector(done))
+    tabs.selectedSegmentIndex = 0
+    tabs.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
+    navigationItem.titleView = tabs
+    tableView.keyboardDismissMode = .onDrag
+    tableView.rowHeight = 54
+  }
+
+  @objc private func done() { dismiss(animated: true) }
+  @objc private func tabChanged() { tableView.reloadData() }
+
+  override func numberOfSections(in tableView: UITableView) -> Int {
+    switch tabs.selectedSegmentIndex {
+    case 0: return sources.isEmpty ? 1 : 2
+    case 2: return 2
+    default: return 1
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    switch tabs.selectedSegmentIndex {
+    case 0: return section == 0 ? "Novel filters" : "Sources"
+    case 1: return "Sort novels · tap again to reverse"
+    default: return section == 0 ? "Display mode" : "Appearance and badges"
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    switch tabs.selectedSegmentIndex {
+    case 0: return section == 0 ? filterItems.count : sources.count
+    case 1: return sortItems.count
+    default: return section == 0 ? displayItems.count : toggles.count
+    }
+  }
+
+  override func tableView(_ tableView: UITableView,
+                          cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "setting")
+      ?? UITableViewCell(style: .value1, reuseIdentifier: "setting")
+    cell.accessoryType = .none
+    cell.detailTextLabel?.text = nil
+    cell.textLabel?.textColor = .label
+    switch tabs.selectedSegmentIndex {
+    case 0:
+      if indexPath.section == 0 {
+        let filter = filterItems[indexPath.row]
+        let value = filters[filter.0] ?? 0
+        cell.textLabel?.text = filter.1
+        cell.detailTextLabel?.text = ["Any", "Include", "Exclude"][min(max(value, 0), 2)]
+      } else {
+        let name = sources[indexPath.row]
+        cell.textLabel?.text = name
+        cell.accessoryType = selectedSources.contains(name) ? .checkmark : .none
+      }
+    case 1:
+      cell.textLabel?.text = sortItems[indexPath.row]
+      if sortIndex == indexPath.row {
+        cell.accessoryType = .checkmark
+        cell.detailTextLabel?.text = sortReverse ? "Descending" : "Ascending"
+      }
+    default:
+      if indexPath.section == 0 {
+        cell.textLabel?.text = displayItems[indexPath.row]
+        cell.accessoryType = displayIndex == indexPath.row ? .checkmark : .none
+      } else {
+        let entry = toggles[indexPath.row]
+        cell.textLabel?.text = entry.1
+        cell.accessoryType = settings[entry.0] == true ? .checkmark : .none
+      }
+    }
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    switch tabs.selectedSegmentIndex {
+    case 0:
+      if indexPath.section == 0 {
+        let key = filterItems[indexPath.row].0
+        let next = ((filters[key] ?? 0) + 1) % 3
+        filters[key] = next
+        onAction("filter", ["key": key, "value": next])
+      } else {
+        let name = sources[indexPath.row]
+        if !selectedSources.insert(name).inserted { selectedSources.remove(name) }
+        onAction("sources", Array(selectedSources).sorted())
+      }
+    case 1:
+      if sortIndex == indexPath.row { sortReverse.toggle() }
+      else { sortIndex = indexPath.row }
+      onAction("sort", indexPath.row)
+    default:
+      if indexPath.section == 0 {
+        displayIndex = indexPath.row
+        onAction("display", displayIndex)
+      } else {
+        let key = toggles[indexPath.row].0
+        let next = !(settings[key] ?? false)
+        settings[key] = next
+        onAction("displayToggle", ["key": key, "value": next])
+      }
+    }
+    tableView.reloadData()
   }
 }
