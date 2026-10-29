@@ -989,6 +989,8 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   private let backgroundButton = UIButton(type: .system)
   private let textButton = UIButton(type: .system)
   private let fontButton = UIButton(type: .system)
+  private var fontChips: [UIButton] = []
+  private var themeCards: [UIButton] = []
   private let keepAwake = UISwitch()
   private let showPercent = UISwitch()
   private let compactParagraphs = UISwitch()
@@ -1179,7 +1181,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
 
   private func showReaderSettings() {
     form.addArrangedSubview(section("Theme", children: [
-      themeControl,
+      makeThemeCards(),
       horizontalRow([backgroundButton, textButton])
     ]))
     form.addArrangedSubview(section("Text Align", children: [alignmentControl]))
@@ -1192,11 +1194,99 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     form.addArrangedSubview(section("Line Height", children: [
       sliderRow(lineSlider, value: lineValue)
     ]))
-    form.addArrangedSubview(section("Font", children: [fontButton]))
+    form.addArrangedSubview(section("Font", children: [makeFontChips()]))
     form.addArrangedSubview(section("Reading mode", children: [modeControl]))
     if modeControl.selectedSegmentIndex == 1 {
       form.addArrangedSubview(section("Page mode", children: [pageControl]))
     }
+  }
+
+  private func makeThemeCards() -> UIView {
+    let titles = ["Aa\nDark", "Aa\nLight", "Aa\nBlack", "Aa\nSepia"]
+    let backgrounds: [UIColor] = [
+      UIColor(red: 41 / 255, green: 40 / 255, blue: 50 / 255, alpha: 1),
+      .white, .black,
+      UIColor(red: 245 / 255, green: 230 / 255, blue: 211 / 255, alpha: 1)
+    ]
+    let foregrounds: [UIColor] = [
+      .white, .black, .white,
+      UIColor(red: 95 / 255, green: 75 / 255, blue: 50 / 255, alpha: 1)
+    ]
+    themeCards = titles.enumerated().map { index, title in
+      let button = UIButton(type: .system)
+      button.tag = index
+      button.setTitle(title, for: .normal)
+      button.titleLabel?.numberOfLines = 2
+      button.titleLabel?.textAlignment = .center
+      button.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+      button.setTitleColor(foregrounds[index], for: .normal)
+      button.backgroundColor = backgrounds[index]
+      button.layer.cornerRadius = 16
+      button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+      button.addTarget(self, action: #selector(themeCardTapped(_:)), for: .touchUpInside)
+      return button
+    }
+    updateThemeSelection()
+    return horizontalRow(themeCards)
+  }
+
+  private func updateThemeSelection() {
+    for (index, button) in themeCards.enumerated() {
+      button.layer.borderWidth = index == themeControl.selectedSegmentIndex ? 3 : 1
+      button.layer.borderColor = index == themeControl.selectedSegmentIndex
+        ? UIColor.systemBlue.cgColor : UIColor.separator.cgColor
+    }
+  }
+
+  private func makeFontChips() -> UIView {
+    let fonts = [
+      ("Default", ""), ("OpenDyslexic", "OpenDyslexic"),
+      ("Lexend", "Lexend"), ("Atkinson Hyperlegible", "AtkinsonHyperlegible")
+    ]
+    fontChips = fonts.enumerated().map { index, entry in
+      let button = UIButton(type: .system)
+      button.tag = index
+      button.configuration = .tinted()
+      button.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+      button.setTitle(entry.0, for: .normal)
+      button.addTarget(self, action: #selector(fontChipTapped(_:)), for: .touchUpInside)
+      button.heightAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true
+      return button
+    }
+    updateFontChipSelection()
+    let rows = UIStackView(arrangedSubviews: [
+      horizontalRow(Array(fontChips[0...1])),
+      horizontalRow(Array(fontChips[2...3]))
+    ])
+    rows.axis = .vertical
+    rows.spacing = 8
+    return rows
+  }
+
+  private func updateFontChipSelection() {
+    let keys = ["", "OpenDyslexic", "Lexend", "AtkinsonHyperlegible"]
+    for (index, button) in fontChips.enumerated() {
+      let selected = keys[index] == fontKey
+      button.layer.cornerRadius = 14
+      button.layer.borderWidth = selected ? 2 : 1
+      button.layer.borderColor = selected
+        ? UIColor.systemBlue.cgColor : UIColor.separator.cgColor
+    }
+  }
+
+  @objc private func themeCardTapped(_ button: UIButton) {
+    themeControl.selectedSegmentIndex = button.tag
+    updateThemeSelection()
+    themeChanged()
+  }
+
+  @objc private func fontChipTapped(_ button: UIButton) {
+    let keys = ["", "OpenDyslexic", "Lexend", "AtkinsonHyperlegible"]
+    guard keys.indices.contains(button.tag) else { return }
+    fontKey = keys[button.tag]
+    updateFontChipSelection()
+    updateFontMenu()
+    onChange?("fontFamily", fontKey)
   }
 
   private func showGeneralSettings() {
@@ -1315,6 +1405,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
       ("Lexend", "Lexend"), ("Atkinson Hyperlegible", "AtkinsonHyperlegible")
     ]
     fontButton.setTitle("Font: \(options.first(where: { $0.1 == fontKey })?.0 ?? "Default")", for: .normal)
+    updateFontChipSelection()
     fontButton.menu = UIMenu(children: options.map { option in
       UIAction(title: option.0, state: option.1 == fontKey ? .on : .off) { [weak self] _ in
         guard let self else { return }
