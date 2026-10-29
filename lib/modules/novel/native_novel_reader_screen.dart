@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:mangayomi/models/chapter.dart';
+import 'package:mangayomi/services/volume_keys.dart';
 import 'package:mangayomi/utils/extensions/manga_extensions.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/novel/novel_reader_controller_provider.dart';
@@ -67,6 +68,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
   @override
   void dispose() {
     _readingTime.stop();
+    unawaited(VolumeKeys.disable());
     _channel.setMethodCallHandler(null);
     super.dispose();
   }
@@ -87,7 +89,10 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     _opening = true;
     try {
       await _channel.invokeMethod<void>('open', await _buildPayload(_chapter, data));
-      if (mounted) _presented = true;
+      if (mounted) {
+        _presented = true;
+        unawaited(_syncVolumeKeys());
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -159,6 +164,9 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       'keepAwake': ref.read(keepScreenOnReaderStateProvider),
       'showPercent': ref.read(novelShowScrollPercentageStateProvider),
       'tapZones': ref.read(novelTapToScrollStateProvider),
+      'volumeKeys': ref.read(volumeKeysPagingStateProvider),
+      'invertVolume': ref.read(volumeKeysInvertedStateProvider),
+      'orientation': ref.read(readerOrientationStateProvider),
       'autoScroll': auto.$1,
       'autoScrollSpeed': auto.$2,
       'ttsSpeed': ref.read(ttsSpeechRateStateProvider),
@@ -303,6 +311,22 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
         if (enabled != null) {
           ref.read(novelTapToScrollStateProvider.notifier).set(enabled);
         }
+      case 'volumeKeys':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(volumeKeysPagingStateProvider.notifier).set(enabled);
+          unawaited(_syncVolumeKeys());
+        }
+      case 'invertVolume':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(volumeKeysInvertedStateProvider.notifier).set(enabled);
+        }
+      case 'orientation':
+        final orientation = payload['value'] as int?;
+        if (orientation != null) {
+          ref.read(readerOrientationStateProvider.notifier).set(orientation);
+        }
       case 'compactParagraphs':
         final enabled = payload['value'] as bool?;
         if (enabled != null) {
@@ -363,6 +387,21 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     return null;
   }
 
+  Future<void> _syncVolumeKeys() async {
+    if (!mounted || !_presented) return;
+    if (!ref.read(volumeKeysPagingStateProvider)) {
+      await VolumeKeys.disable();
+      return;
+    }
+    await VolumeKeys.enable((up) {
+      if (!mounted || !_presented || _closing) return;
+      final inverted = ref.read(volumeKeysInvertedStateProvider);
+      unawaited(_channel.invokeMethod<void>(
+        'volumeKey', <String, Object?>{'forward': up != inverted},
+      ).catchError((Object _) {}));
+    });
+  }
+
   Future<void> _persistChapter() async {
     final controller = _controller;
     controller.setChapterOffset(_progress * 1000, 1000, true);
@@ -414,6 +453,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     if (_closing) return;
     _closing = true;
     try {
+      await VolumeKeys.disable();
       await _persistChapter();
     } finally {
       if (mounted) Navigator.of(context).pop();
