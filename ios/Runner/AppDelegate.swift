@@ -81,7 +81,7 @@ import UniformTypeIdentifiers
           self?.nativeNovelReaderChannel?.invokeMethod("event", arguments: payload)
         }
         reader.onDismiss = { [weak self] in self?.nativeNovelReader = nil }
-        let navigation = UINavigationController(rootViewController: reader)
+        let navigation = NovayomiReaderNavigationController(rootViewController: reader)
         navigation.modalPresentationStyle = .fullScreen
         navigation.isModalInPresentation = true
         presenter.present(navigation, animated: true)
