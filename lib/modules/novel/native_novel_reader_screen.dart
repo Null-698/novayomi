@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:mangayomi/models/chapter.dart';
+import 'package:mangayomi/utils/extensions/manga_extensions.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/novel/novel_reader_controller_provider.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
@@ -112,18 +113,18 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
                 (sourceUrl.scheme == 'https' || sourceUrl.scheme == 'http'))
             ? sourceUrl
             : null;
-    final chapters = novel?.chapters.toList() ?? <Chapter>[];
+    // The native sheet must see the *entire* reading-order list, not only a
+    // sliding window of 25 entries around the current chapter.
+    final chapters = novel?.getChapterListForReading(current: chapter) ?? <Chapter>[];
     final index = chapters.indexWhere((c) => c.id == chapter.id);
-    final start = index < 0 ? 0 : (index - 12).clamp(0, chapters.length).toInt();
-    final end = index < 0
-        ? chapters.length.clamp(0, 25).toInt()
-        : (index + 13).clamp(0, chapters.length).toInt();
 
     return <String, Object?>{
       'title': novel?.name ?? 'Novel',
       'subtitle': chapter.name ?? '',
       'html': _prepareHtml(data.$1, data.$2),
       'chapterId': chapter.id,
+      'chapterIndex': index >= 0 ? index + 1 : 0,
+      'chapterCount': chapters.length,
       'progress': double.tryParse(chapter.lastPageRead ?? '')?.clamp(0.0, 1.0).toDouble() ?? 0,
       'bookmarked': controller.getChapterBookmarked(),
       'hasPrevious': controller.hasPreviousChapter,
@@ -141,7 +142,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       'fontFamily': _webkitFont(ref.read(novelFontFamilyStateProvider)),
       if (baseURL != null) 'baseURL': baseURL.toString(),
       'chapters': [
-        for (final entry in chapters.sublist(start, end))
+        for (final entry in chapters)
           if (entry.id != null)
             <String, Object?>{
               'id': entry.id,
@@ -232,6 +233,32 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
         if (height != null) {
           ref.read(novelReaderLineHeightStateProvider.notifier).set(height);
         }
+      case 'padding':
+        final padding = payload['value'] as int?;
+        if (padding != null) {
+          ref.read(novelReaderPaddingStateProvider.notifier).set(padding);
+        }
+      case 'background':
+        final color = payload['value'] as String?;
+        if (color != null) {
+          ref.read(novelReaderThemeStateProvider.notifier).set(color);
+        }
+      case 'foreground':
+        final color = payload['value'] as String?;
+        if (color != null) {
+          ref.read(novelReaderTextColorStateProvider.notifier).set(color);
+        }
+      case 'alignment':
+        final align = payload['value'] as String?;
+        if (align != null) {
+          final style = switch (align) {
+            'center' => NovelTextAlign.center,
+            'right' => NovelTextAlign.right,
+            'justify' => NovelTextAlign.block,
+            _ => NovelTextAlign.left,
+          };
+          ref.read(novelTextAlignStateProvider.notifier).set(style);
+        }
       case 'mode':
         final mode = payload['value'] as String?;
         if (mode == 'scroll' || mode == 'pages') {
@@ -267,7 +294,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     Chapter? target;
     if (id != null) {
       if (_chapter.id == id) return;
-      for (final c in _chapter.manga.value?.chapters.toList() ?? <Chapter>[]) {
+      for (final c in _chapter.manga.value?.getChapterListForReading(current: _chapter) ?? <Chapter>[]) {
         if (c.id == id) {
           target = c;
           break;
