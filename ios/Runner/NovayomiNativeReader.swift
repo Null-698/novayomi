@@ -29,6 +29,15 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private var lineHeight: Double
   private var readingMode: String
   private var isBookmarked = false
+  private var autoScrollLink: CADisplayLink?
+  private var autoScrollEnabled = false
+  private var autoScrollSpeed = 10.0
+  private var tapZonesEnabled = false
+  private var ttsSpeed = 0.5
+  private var ttsPitch = 1.0
+  private var ttsLanguage: String?
+  private var previousIdleTimerDisabled = false
+  private var previousBrightness: CGFloat?
 
   init(chapter: [String: Any]) {
     self.chapter = chapter
@@ -37,6 +46,12 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     readingMode = chapter["mode"] as? String ?? "scroll"
     currentProgress = min(max(chapter["progress"] as? Double ?? 0, 0), 1)
     isBookmarked = chapter["bookmarked"] as? Bool ?? false
+    autoScrollEnabled = chapter["autoScroll"] as? Bool ?? false
+    autoScrollSpeed = chapter["autoScrollSpeed"] as? Double ?? 10
+    tapZonesEnabled = chapter["tapZones"] as? Bool ?? false
+    ttsSpeed = chapter["ttsSpeed"] as? Double ?? 0.5
+    ttsPitch = chapter["ttsPitch"] as? Double ?? 1
+    ttsLanguage = chapter["ttsLanguage"] as? String
     let config = WKWebViewConfiguration()
     config.defaultWebpagePreferences.allowsContentJavaScript = false
     config.allowsInlineMediaPlayback = false
@@ -100,6 +115,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     progressControl.addTarget(self, action: #selector(progressChanged(_:)), for: .valueChanged)
     progressControl.addTarget(self, action: #selector(progressEnded(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
 
+    previousIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
+    UIApplication.shared.isIdleTimerDisabled = chapter["keepAwake"] as? Bool ?? false
     updateBars()
     renderChapter()
   }
@@ -173,19 +190,27 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     let background = cssColor("background", fallback: "#292832")
     let foreground = cssColor("foreground", fallback: "#CCCCCC")
     let paragraphSpace = (chapter["compactParagraphs"] as? Bool ?? false) ? 4 : 8
-    let padding = max(6, min(chapter["padding"] as? Int ?? 16, 64))
+    let padding = max(0, min(chapter["padding"] as? Int ?? 16, 50))
     let alignment = ["left", "right", "center", "justify"].contains(safeString("alignment", fallback: "left"))
       ? safeString("alignment", fallback: "left") : "left"
-    // Only a fixed set of CSS fonts are supported by WebKit; no remote CSS or
-    // Flutter font assets are downloaded while reading.
+    // OpenDyslexic is embedded from Novayomi's existing local font asset.
     let familyName = safeString("fontFamily", fallback: "")
-    let font = familyName == "Georgia" ? "Georgia, serif" :
-      familyName == "Palatino" ? "Palatino, serif" :
-      familyName == "Helvetica" ? "Helvetica, sans-serif" :
-      "-apple-system, BlinkMacSystemFont, serif"
+    let embeddedFont = safeString("fontData", fallback: "")
+    let fontFace = embeddedFont.isEmpty ? "" :
+      "@font-face{font-family:'NovayomiDyslexic';src:url(data:font/otf;base64,\(embeddedFont)) format('opentype');}"
+    let font: String
+    switch familyName {
+    case "OpenDyslexic": font = "'NovayomiDyslexic', -apple-system, sans-serif"
+    case "Lexend": font = "'Lexend', -apple-system, sans-serif"
+    case "AtkinsonHyperlegible": font = "'Atkinson Hyperlegible', -apple-system, sans-serif"
+    default: font = "-apple-system, BlinkMacSystemFont, serif"
+    }
     let modeStyle: String
     if readingMode == "pages" {
-      modeStyle = "html,body{height:100%;overflow-x:visible;overflow-y:hidden} #book{height:100vh;width:100vw;column-width:100vw;column-gap:0;column-fill:auto;overflow:visible;box-sizing:border-box}"
+      let layout = safeString("pageLayout", fallback: "single")
+      let twoPages = layout == "double" || (layout == "auto" && view.bounds.width > view.bounds.height)
+      let columnWidth = twoPages ? "50vw" : "100vw"
+      modeStyle = "html,body{height:100%;overflow-x:visible;overflow-y:hidden} #book{height:100vh;width:100vw;column-width:\(columnWidth);column-gap:0;column-fill:auto;overflow:visible;box-sizing:border-box}"
     } else {
       modeStyle = "html,body{min-height:100%;overflow-x:hidden} #book{box-sizing:border-box;min-height:100%;}"
     }
@@ -193,6 +218,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     <!DOCTYPE html><html><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <style>
+    \(fontFace)
     :root { color-scheme: light dark; --reader-size: \(fontSize)px; --reader-line: \(lineHeight); }
     html, body { margin:0; padding:0; background:\(background); color:\(foreground);
       font-size:var(--reader-size); line-height:var(--reader-line);
@@ -230,6 +256,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     webView.scrollView.isPagingEnabled = readingMode == "pages"
     webView.scrollView.alwaysBounceVertical = readingMode != "pages"
     webView.scrollView.alwaysBounceHorizontal = readingMode == "pages"
+    configureAutoScroll()
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
       self.restoreProgress(self.currentProgress)
@@ -466,7 +493,19 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       padding: chapter["padding"] as? Int ?? 16,
       mode: readingMode,
       background: safeString("background", fallback: "#292832"),
-      alignment: safeString("alignment", fallback: "left")
+      foreground: safeString("foreground", fallback: "#CCCCCC"),
+      alignment: safeString("alignment", fallback: "left"),
+      fontKey: safeString("fontFamily", fallback: ""),
+      pageLayout: safeString("pageLayout", fallback: "single"),
+      keepAwake: chapter["keepAwake"] as? Bool ?? false,
+      showPercent: chapter["showPercent"] as? Bool ?? true,
+      compactParagraphs: chapter["compactParagraphs"] as? Bool ?? false,
+      tapZones: tapZonesEnabled,
+      autoScroll: autoScrollEnabled,
+      autoScrollSpeed: autoScrollSpeed,
+      ttsSpeed: ttsSpeed,
+      ttsPitch: ttsPitch,
+      ttsLanguage: ttsLanguage
     )
     settings.onChange = { [weak self] key, value in
       self?.applyReaderSetting(key: key, value: value)
