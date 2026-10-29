@@ -729,34 +729,82 @@ private final class NovayomiChapterSheet: UITableViewController, UISearchResults
 
 /// Native reader preferences; this is a UIKit sheet, not a Flutter bottom
 /// panel. Changes are sent back to the existing Dart preferences providers.
-private final class NovayomiReadingSettingsSheet: UIViewController {
+private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPickerViewControllerDelegate {
   var onChange: ((String, Any) -> Void)?
   var onSpeak: (() -> Void)?
 
+  private let tabs = UISegmentedControl(items: ["Reader", "General", "Text-to-Speech"])
+  private let scroll = UIScrollView()
+  private let form = UIStackView()
   private let fontSlider = UISlider()
   private let lineSlider = UISlider()
   private let marginSlider = UISlider()
   private let fontValue = UILabel()
   private let lineValue = UILabel()
   private let marginValue = UILabel()
-  private let modeControl = UISegmentedControl(items: ["Scroll", "Pages"])
-  private let themeControl = UISegmentedControl(items: ["Dark", "Light", "Sepia"])
-  private let alignmentControl = UISegmentedControl(items: ["Left", "Justify", "Center"])
+  private let modeControl = UISegmentedControl(items: ["Continuous", "Paged"])
+  private let pageControl = UISegmentedControl(items: ["Single", "Double", "Auto"])
+  private let themeControl = UISegmentedControl(items: ["Dark", "Light", "Black", "Sepia"])
+  private let alignmentControl = UISegmentedControl(items: ["Left", "Center", "Right", "Justify"])
+  private let backgroundButton = UIButton(type: .system)
+  private let textButton = UIButton(type: .system)
+  private let fontButton = UIButton(type: .system)
+  private let keepAwake = UISwitch()
+  private let showPercent = UISwitch()
+  private let compactParagraphs = UISwitch()
+  private let tapZones = UISwitch()
+  private let autoScroll = UISwitch()
+  private let autoScrollSpeed = UISlider()
+  private let brightness = UISlider()
+  private let ttsSpeed = UISlider()
+  private let ttsPitch = UISlider()
+  private let ttsSpeedLabel = UILabel()
+  private let ttsPitchLabel = UILabel()
+  private let languageButton = UIButton(type: .system)
+  private var colorTarget = "background"
+  private var backgroundHex: String
+  private var foregroundHex: String
+  private var fontKey: String
   private let initialFont: Int
   private let initialLine: Double
   private let initialPadding: Int
   private let initialMode: String
-  private let initialBackground: String
   private let initialAlignment: String
+  private let initialPageLayout: String
+  private let initialKeepAwake: Bool
+  private let initialShowPercent: Bool
+  private let initialCompact: Bool
+  private let initialTapZones: Bool
+  private let initialAutoScroll: Bool
+  private let initialAutoScrollSpeed: Double
+  private let initialTtsSpeed: Double
+  private let initialTtsPitch: Double
+  private var ttsLanguage: String?
 
   init(fontSize: Int, lineHeight: Double, padding: Int, mode: String,
-       background: String, alignment: String) {
+       background: String, foreground: String, alignment: String,
+       fontKey: String, pageLayout: String, keepAwake: Bool,
+       showPercent: Bool, compactParagraphs: Bool, tapZones: Bool,
+       autoScroll: Bool, autoScrollSpeed: Double,
+       ttsSpeed: Double, ttsPitch: Double, ttsLanguage: String?) {
     initialFont = fontSize
     initialLine = lineHeight
     initialPadding = padding
     initialMode = mode
-    initialBackground = background
     initialAlignment = alignment
+    initialPageLayout = pageLayout
+    initialKeepAwake = keepAwake
+    initialShowPercent = showPercent
+    initialCompact = compactParagraphs
+    initialTapZones = tapZones
+    initialAutoScroll = autoScroll
+    initialAutoScrollSpeed = autoScrollSpeed
+    initialTtsSpeed = ttsSpeed
+    initialTtsPitch = ttsPitch
+    self.ttsLanguage = ttsLanguage
+    backgroundHex = background
+    foregroundHex = foreground
+    self.fontKey = fontKey
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -768,60 +816,205 @@ private final class NovayomiReadingSettingsSheet: UIViewController {
     view.backgroundColor = .systemGroupedBackground
     navigationItem.rightBarButtonItem = UIBarButtonItem(
       barButtonSystemItem: .done, target: self, action: #selector(done))
+    tabs.selectedSegmentIndex = 0
+    tabs.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
+    tabs.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(tabs)
 
-    let scroll = UIScrollView()
     scroll.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(scroll)
-    let form = UIStackView()
     form.axis = .vertical
-    form.spacing = 20
+    form.spacing = 14
     form.translatesAutoresizingMaskIntoConstraints = false
     scroll.addSubview(form)
     NSLayoutConstraint.activate([
+      tabs.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+      tabs.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+      tabs.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+      scroll.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 8),
       scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      form.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 22),
-      form.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -22),
-      form.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 22),
-      form.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -36),
-      form.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -44)
+      form.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16),
+      form.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -16),
+      form.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 16),
+      form.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -34),
+      form.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32)
     ])
+    configureControls()
+    showTab()
+  }
 
-    setupSlider(fontSlider, min: 10, max: 36, value: Float(initialFont),
+  private func configureControls() {
+    setupSlider(fontSlider, min: 8, max: 40, value: Float(initialFont),
                 selector: #selector(fontChanged(_:)))
-    setupSlider(lineSlider, min: 1, max: 2.6, value: Float(initialLine),
+    setupSlider(lineSlider, min: 1, max: 3, value: Float(initialLine),
                 selector: #selector(lineChanged(_:)))
-    setupSlider(marginSlider, min: 6, max: 48, value: Float(initialPadding),
+    setupSlider(marginSlider, min: 0, max: 50, value: Float(initialPadding),
                 selector: #selector(marginChanged(_:)))
-    fontValue.text = "\(initialFont) pt"
-    lineValue.text = String(format: "%.1f×", initialLine)
-    marginValue.text = "\(initialPadding) pt"
-    form.addArrangedSubview(sliderSection("Text size", value: fontValue, control: fontSlider))
-    form.addArrangedSubview(sliderSection("Line spacing", value: lineValue, control: lineSlider))
-    form.addArrangedSubview(sliderSection("Page margins", value: marginValue, control: marginSlider))
-
+    fontValue.text = "\(initialFont) px"
+    lineValue.text = String(format: "%.1f", initialLine)
+    marginValue.text = "\(initialPadding) px"
     modeControl.selectedSegmentIndex = initialMode == "pages" ? 1 : 0
     modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
-    form.addArrangedSubview(segmentSection("Reading mode", control: modeControl))
-
-    themeControl.selectedSegmentIndex = initialBackground.uppercased() == "#FFFFFF" ? 1
-      : initialBackground.uppercased() == "#F5ECD8" ? 2 : 0
+    pageControl.selectedSegmentIndex = initialPageLayout == "double" ? 1
+      : initialPageLayout == "auto" ? 2 : 0
+    pageControl.addTarget(self, action: #selector(pageChanged), for: .valueChanged)
+    themeControl.selectedSegmentIndex = backgroundHex.uppercased() == "#FFFFFF" ? 1
+      : backgroundHex.uppercased() == "#000000" ? 2
+      : backgroundHex.uppercased() == "#F5E6D3" ? 3 : 0
     themeControl.addTarget(self, action: #selector(themeChanged), for: .valueChanged)
-    form.addArrangedSubview(segmentSection("Page appearance", control: themeControl))
-
-    alignmentControl.selectedSegmentIndex = initialAlignment == "justify" ? 1
-      : initialAlignment == "center" ? 2 : 0
+    alignmentControl.selectedSegmentIndex = initialAlignment == "center" ? 1
+      : initialAlignment == "right" ? 2
+      : initialAlignment == "justify" ? 3 : 0
     alignmentControl.addTarget(self, action: #selector(alignmentChanged), for: .valueChanged)
-    form.addArrangedSubview(segmentSection("Text alignment", control: alignmentControl))
 
-    let speak = UIButton(type: .system)
-    speak.configuration = .filled()
-    speak.setTitle("Read Aloud / Stop Reading", for: .normal)
-    speak.addTarget(self, action: #selector(speakTapped), for: .touchUpInside)
-    speak.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-    form.addArrangedSubview(speak)
+    backgroundButton.configuration = .tinted()
+    textButton.configuration = .tinted()
+    backgroundButton.addTarget(self, action: #selector(backgroundColorTapped), for: .touchUpInside)
+    textButton.addTarget(self, action: #selector(textColorTapped), for: .touchUpInside)
+    refreshColorLabels()
+
+    fontButton.configuration = .tinted()
+    fontButton.showsMenuAsPrimaryAction = true
+    updateFontMenu()
+
+    keepAwake.isOn = initialKeepAwake
+    showPercent.isOn = initialShowPercent
+    compactParagraphs.isOn = initialCompact
+    tapZones.isOn = initialTapZones
+    autoScroll.isOn = initialAutoScroll
+    for control in [keepAwake, showPercent, compactParagraphs, tapZones, autoScroll] {
+      control.addTarget(self, action: #selector(switchChanged(_:)), for: .valueChanged)
+    }
+    setupSlider(autoScrollSpeed, min: 2, max: 30, value: Float(initialAutoScrollSpeed),
+                selector: #selector(autoScrollSpeedChanged(_:)))
+    brightness.minimumValue = 0.1
+    brightness.maximumValue = 1
+    brightness.value = Float(UIScreen.main.brightness)
+    brightness.isContinuous = false
+    brightness.addTarget(self, action: #selector(brightnessChanged(_:)), for: .valueChanged)
+
+    setupSlider(ttsSpeed, min: 0.1, max: 1, value: Float(initialTtsSpeed),
+                selector: #selector(ttsSpeedChanged(_:)))
+    setupSlider(ttsPitch, min: 0.5, max: 2, value: Float(initialTtsPitch),
+                selector: #selector(ttsPitchChanged(_:)))
+    ttsSpeedLabel.text = String(format: "%.1f×", initialTtsSpeed * 2)
+    ttsPitchLabel.text = String(format: "%.1f", initialTtsPitch)
+    languageButton.configuration = .tinted()
+    languageButton.showsMenuAsPrimaryAction = true
+    updateLanguageMenu()
+  }
+
+  private func clearForm() {
+    for view in form.arrangedSubviews {
+      form.removeArrangedSubview(view)
+      view.removeFromSuperview()
+    }
+  }
+
+  private func showTab() {
+    clearForm()
+    scroll.setContentOffset(.zero, animated: false)
+    switch tabs.selectedSegmentIndex {
+    case 1: showGeneralSettings()
+    case 2: showSpeechSettings()
+    default: showReaderSettings()
+    }
+  }
+
+  private func showReaderSettings() {
+    form.addArrangedSubview(section("Theme", children: [
+      themeControl,
+      horizontalRow([backgroundButton, textButton])
+    ]))
+    form.addArrangedSubview(section("Text Align", children: [alignmentControl]))
+    form.addArrangedSubview(section("Font size", children: [
+      sliderRow(fontSlider, value: fontValue)
+    ]))
+    form.addArrangedSubview(section("Padding", children: [
+      sliderRow(marginSlider, value: marginValue)
+    ]))
+    form.addArrangedSubview(section("Line Height", children: [
+      sliderRow(lineSlider, value: lineValue)
+    ]))
+    form.addArrangedSubview(section("Font", children: [fontButton]))
+    form.addArrangedSubview(section("Reading mode", children: [modeControl]))
+    if modeControl.selectedSegmentIndex == 1 {
+      form.addArrangedSubview(section("Page mode", children: [pageControl]))
+    }
+  }
+
+  private func showGeneralSettings() {
+    form.addArrangedSubview(section("Display", children: [
+      switchRow("Keep screen on", control: keepAwake),
+      switchRow("Show reading percentage", control: showPercent),
+      switchRow("Remove extra paragraph spacing", control: compactParagraphs),
+      switchRow("Use tap zones for paging", control: tapZones)
+    ]))
+    form.addArrangedSubview(section("Auto-scroll", children: [
+      switchRow("Auto-scroll while reading", control: autoScroll),
+      sliderRow(autoScrollSpeed, value: nil)
+    ]))
+    form.addArrangedSubview(section("Screen brightness", children: [
+      sliderRow(brightness, value: nil)
+    ]))
+  }
+
+  private func showSpeechSettings() {
+    form.addArrangedSubview(section("Text-to-Speech", children: [
+      sliderRow(ttsSpeed, value: ttsSpeedLabel),
+      sliderRow(ttsPitch, value: ttsPitchLabel),
+      languageButton
+    ]))
+    let play = UIButton(type: .system)
+    play.configuration = .filled()
+    play.setTitle("Read aloud / Stop", for: .normal)
+    play.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    play.addTarget(self, action: #selector(speakTapped), for: .touchUpInside)
+    form.addArrangedSubview(section("Playback", children: [play]))
+  }
+
+  private func section(_ title: String, children: [UIView]) -> UIView {
+    let wrapper = UIStackView()
+    wrapper.axis = .vertical
+    wrapper.spacing = 12
+    wrapper.isLayoutMarginsRelativeArrangement = true
+    wrapper.layoutMargins = UIEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
+    wrapper.backgroundColor = .secondarySystemGroupedBackground
+    wrapper.layer.cornerRadius = 18
+    let heading = UILabel()
+    heading.text = title
+    heading.font = .preferredFont(forTextStyle: .headline)
+    wrapper.addArrangedSubview(heading)
+    children.forEach(wrapper.addArrangedSubview)
+    return wrapper
+  }
+
+  private func horizontalRow(_ views: [UIView]) -> UIView {
+    let row = UIStackView(arrangedSubviews: views)
+    row.axis = .horizontal
+    row.alignment = .fill
+    row.distribution = .fillEqually
+    row.spacing = 8
+    return row
+  }
+
+  private func switchRow(_ title: String, control: UISwitch) -> UIView {
+    let label = UILabel()
+    label.text = title
+    label.font = .preferredFont(forTextStyle: .body)
+    label.numberOfLines = 0
+    let row = UIStackView(arrangedSubviews: [label, control])
+    row.axis = .horizontal
+    row.alignment = .center
+    row.spacing = 8
+    return row
+  }
+
+  private func sliderRow(_ slider: UISlider, value: UILabel?) -> UIView {
+    let parts: [UIView] = value.map { [slider, $0] } ?? [slider]
+    return horizontalRow(parts)
   }
 
   private func setupSlider(_ slider: UISlider, min: Float, max: Float,
@@ -833,62 +1026,128 @@ private final class NovayomiReadingSettingsSheet: UIViewController {
     slider.isContinuous = false
   }
 
-  private func sliderSection(_ title: String, value: UILabel, control: UISlider) -> UIView {
-    let header = UIStackView()
-    header.axis = .horizontal
-    let name = UILabel()
-    name.text = title
-    name.font = .preferredFont(forTextStyle: .subheadline)
-    value.textColor = .secondaryLabel
-    value.textAlignment = .right
-    header.addArrangedSubview(name)
-    header.addArrangedSubview(value)
-    let row = UIStackView(arrangedSubviews: [header, control])
-    row.axis = .vertical
-    row.spacing = 8
-    return row
+  private func refreshColorLabels() {
+    backgroundButton.setTitle("Background  \(backgroundHex)", for: .normal)
+    textButton.setTitle("Text  \(foregroundHex)", for: .normal)
   }
 
-  private func segmentSection(_ title: String, control: UISegmentedControl) -> UIView {
-    let name = UILabel()
-    name.text = title
-    name.font = .preferredFont(forTextStyle: .subheadline)
-    let row = UIStackView(arrangedSubviews: [name, control])
-    row.axis = .vertical
-    row.spacing = 10
-    return row
+  private func updateFontMenu() {
+    let options = [
+      ("Default", ""), ("OpenDyslexic", "OpenDyslexic"),
+      ("Lexend", "Lexend"), ("Atkinson Hyperlegible", "AtkinsonHyperlegible")
+    ]
+    fontButton.setTitle("Font: \(options.first(where: { $0.1 == fontKey })?.0 ?? "Default")", for: .normal)
+    fontButton.menu = UIMenu(children: options.map { option in
+      UIAction(title: option.0, state: option.1 == fontKey ? .on : .off) { [weak self] _ in
+        guard let self else { return }
+        self.fontKey = option.1
+        self.updateFontMenu()
+        self.onChange?("fontFamily", option.1)
+      }
+    })
   }
 
+  private func updateLanguageMenu() {
+    let all = Set(AVSpeechSynthesisVoice.speechVoices().map { $0.language }).sorted()
+    let options: [String?] = [nil] + all.map { Optional($0) }
+    let displayed = ttsLanguage.map { Locale.current.localizedString(forIdentifier: $0) ?? $0 } ?? "System Default"
+    languageButton.setTitle("Voice language: \(displayed)", for: .normal)
+    languageButton.menu = UIMenu(children: options.map { code in
+      let label = code.map { Locale.current.localizedString(forIdentifier: $0) ?? $0 } ?? "System Default"
+      return UIAction(title: label, state: code == ttsLanguage ? .on : .off) { [weak self] _ in
+        self?.ttsLanguage = code
+        self?.updateLanguageMenu()
+        self?.onChange?("ttsLanguage", code ?? "")
+      }
+    })
+  }
+
+  @objc private func tabChanged() { showTab() }
   @objc private func fontChanged(_ slider: UISlider) {
     let size = Int(slider.value.rounded())
-    fontValue.text = "\(size) pt"
+    fontValue.text = "\(size) px"
     onChange?("fontSize", size)
   }
   @objc private func lineChanged(_ slider: UISlider) {
     let value = (Double(slider.value) * 10).rounded() / 10
-    lineValue.text = String(format: "%.1f×", value)
+    lineValue.text = String(format: "%.1f", value)
     onChange?("lineHeight", value)
   }
   @objc private func marginChanged(_ slider: UISlider) {
     let value = Int(slider.value.rounded())
-    marginValue.text = "\(value) pt"
+    marginValue.text = "\(value) px"
     onChange?("padding", value)
   }
   @objc private func modeChanged() {
     onChange?("mode", modeControl.selectedSegmentIndex == 1 ? "pages" : "scroll")
+    showTab()
+  }
+  @objc private func pageChanged() {
+    let layouts = ["single", "double", "auto"]
+    onChange?("pageLayout", layouts[pageControl.selectedSegmentIndex])
   }
   @objc private func themeChanged() {
-    let names = ["dark", "light", "sepia"]
-    onChange?("appearance", names[themeControl.selectedSegmentIndex])
+    onChange?("appearance", ["dark", "light", "black", "sepia"][themeControl.selectedSegmentIndex])
   }
   @objc private func alignmentChanged() {
-    let values = ["left", "justify", "center"]
-    onChange?("alignment", values[alignmentControl.selectedSegmentIndex])
+    onChange?("alignment", ["left", "center", "right", "justify"][alignmentControl.selectedSegmentIndex])
+  }
+  @objc private func switchChanged(_ control: UISwitch) {
+    let key: String
+    if control === keepAwake { key = "keepAwake" }
+    else if control === showPercent { key = "showPercent" }
+    else if control === compactParagraphs { key = "compactParagraphs" }
+    else if control === tapZones { key = "tapZones" }
+    else { key = "autoScroll" }
+    onChange?(key, control.isOn)
+  }
+  @objc private func autoScrollSpeedChanged(_ slider: UISlider) {
+    onChange?("autoScrollSpeed", Double(slider.value))
+  }
+  @objc private func brightnessChanged(_ slider: UISlider) {
+    onChange?("brightness", Double(slider.value))
+  }
+  @objc private func ttsSpeedChanged(_ slider: UISlider) {
+    let speed = (Double(slider.value) * 10).rounded() / 10
+    ttsSpeedLabel.text = String(format: "%.1f×", speed * 2)
+    onChange?("ttsSpeed", speed)
+  }
+  @objc private func ttsPitchChanged(_ slider: UISlider) {
+    let pitch = (Double(slider.value) * 10).rounded() / 10
+    ttsPitchLabel.text = String(format: "%.1f", pitch)
+    onChange?("ttsPitch", pitch)
+  }
+  @objc private func backgroundColorTapped() { showColorPicker(target: "background", hex: backgroundHex) }
+  @objc private func textColorTapped() { showColorPicker(target: "foreground", hex: foregroundHex) }
+  private func showColorPicker(target: String, hex: String) {
+    colorTarget = target
+    let picker = UIColorPickerViewController()
+    picker.delegate = self
+    picker.supportsAlpha = false
+    let value = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+    if let n = UInt32(value, radix: 16) {
+      picker.selectedColor = UIColor(
+        red: CGFloat((n >> 16) & 255) / 255,
+        green: CGFloat((n >> 8) & 255) / 255,
+        blue: CGFloat(n & 255) / 255, alpha: 1)
+    }
+    present(picker, animated: true)
+  }
+  func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController, continuously: Bool) {
+    if continuously { return }
+    var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+    viewController.selectedColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    let hex = String(format: "#%02X%02X%02X",
+                     Int((red * 255).rounded()), Int((green * 255).rounded()),
+                     Int((blue * 255).rounded()))
+    if colorTarget == "background" { backgroundHex = hex }
+    else { foregroundHex = hex }
+    refreshColorLabels()
+    onChange?(colorTarget, hex)
   }
   @objc private func speakTapped() { onSpeak?() }
   @objc private func done() { dismiss(animated: true) }
 }
-
 
 /// The UIKit reader is a full-screen modal, so the navigation controller
 /// must forward home-indicator/status-bar preferences to its reader child.
