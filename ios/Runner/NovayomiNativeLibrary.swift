@@ -33,6 +33,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let total = UILabel()
   private let search = UISearchBar()
   private let categoryScroll = UIScrollView()
+  private var categoryHeight: NSLayoutConstraint!
   private let categoryStack = UIStackView()
   private let sortButton = UIButton(type: .system)
   private let preferencesButton = UIButton(type: .system)
@@ -120,6 +121,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     categoryStack.alignment = .center
     categoryStack.translatesAutoresizingMaskIntoConstraints = false
     categoryScroll.showsHorizontalScrollIndicator = false
+    categoryHeight = categoryScroll.heightAnchor.constraint(equalToConstant: 42)
     categoryScroll.translatesAutoresizingMaskIntoConstraints = false
     categoryScroll.addSubview(categoryStack)
     root.addSubview(categoryScroll)
@@ -185,7 +187,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       categoryScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 4),
       categoryScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       categoryScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      categoryScroll.heightAnchor.constraint(equalToConstant: 42),
+      categoryHeight,
       categoryStack.leadingAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.leadingAnchor, constant: 18),
       categoryStack.trailingAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.trailingAnchor, constant: -18),
       categoryStack.topAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.topAnchor),
@@ -218,7 +220,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   private func apply(_ data: [String: Any]) {
     configuration = data
-    if let list = data["items"] as? [[String: Any]] { entries = list }
+    if let list = data["items"] as? [[String: Any]] {
+      entries = list
+      let ids = Set(list.compactMap { $0["id"] as? Int })
+      selectedIds.formIntersection(ids)
+    }
     if let ids = data["visibleIds"] as? [Int] {
       visibleIds = Set(ids)
       visibleOrder = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, $0.offset) })
@@ -235,6 +241,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       layoutButton.setImage(UIImage(systemName: isList ? "square.grid.2x2" : "list.bullet"),
                             for: .normal)
     }
+    categoryScroll.isHidden = !(data["displaySettings"] as? [String: Bool] ?? [:])
+      .keys.contains("showCategories") ||
+      !(data["displaySettings"] as? [String: Bool] ?? [:])["showCategories", default: true]
+    categoryHeight.constant = categoryScroll.isHidden ? 0 : 42
     updateSortMenu()
     rebuildCategories()
     updateSelectionBar()
@@ -259,6 +269,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       categoryStack.removeArrangedSubview($0)
       $0.removeFromSuperview()
     }
+    if categoryScroll.isHidden { return }
     var categories: [(String, Int?)] = [("All", nil)]
     if entries.contains(where: { ($0["categories"] as? [Int] ?? []).isEmpty }) {
       categories.append(("Uncategorized", -1))
@@ -545,6 +556,8 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     super.init(frame: frame)
     contentView.backgroundColor = .clear
     cover.contentMode = .scaleAspectFill
+    // Buttons overlaid on UIImageView only receive touches when enabled.
+    cover.isUserInteractionEnabled = true
     cover.clipsToBounds = true
     cover.layer.cornerRadius = 8
     cover.backgroundColor = .secondarySystemGroupedBackground
