@@ -25,12 +25,33 @@ The existing iOS bottom tab bar is a real `UITabBar`. A native Library
 buttons, sorting, grid/list displays, image loading and context menus.
 `NativeIosNovelLibrary` supplies the existing reactive Riverpod/Isar data.
 
-**Integration status: STAGED; the current Library route is not replaced.**
-Before enabling the native route, implement and test all existing library
-functions: category and filter management, selection/bulk actions, download
-badges, continue-reading access, full cover headers/custom covers, update and
-import actions, and persisted scroll/search state. Do not force incomplete
-native UI onto the main app.
+**Integration status: STAGED; normal builds still use the existing Library.**
+To build a test IPA, open GitHub Actions → Build IPA Unsigned → Run workflow,
+enable **native_library_preview**, and build from the latest `main`.
+For a local build, use
+`flutter build ios --release --no-codesign --dart-define=NOVAYOMI_NATIVE_LIBRARY_PREVIEW=true`.
+The switch is iOS-only and defaults to false. Do not treat the preview as
+production-ready.
+
+Implemented in the staged native Library:
+- UICollectionView grid and list, system search field and category chips.
+- Native Filter / Sort / Display sheet using the current persisted providers,
+  including source filters, reverse unread-count sorting and grid columns.
+- Search by novel title, source, genre and author with filtered/all scope.
+- Long-press multi-selection, mark read/unread, set categories and remove
+  library entries with a native confirmation; removal keeps downloaded files.
+- Unread/downloaded count badges, custom covers, cover request headers,
+  continue-reading buttons, pull-to-refresh and native context menus.
+
+**Still required before the default route can switch:**
+- Native `ContinueShelf` and complete history-based continuation UI.
+- Native category creation/editing and category management navigation.
+- EPUB import using a native document picker and the existing import service.
+- Migrate and downloaded-file deletion actions with native confirmation UI.
+- Display-specific badges/cover style parity and full list/grid options.
+- Search, selected category and scroll-position restoration across tab changes.
+- iOS build, real-device performance, VoiceOver and large-type testing.
+Do not promote the preview until these gates pass.
 
 ### 2.2 — Native novel details
 
@@ -56,7 +77,7 @@ current providers and preserve account and backup formats.
 ### 2.6 — iOS shell cutover and cleanup
 
 Promote UIKit to own the complete visible navigation hierarchy. Remove
-unused iOS Flutter UI surfaces only after functionality, accessiblity,
+unused iOS Flutter UI surfaces only after functionality, accessibility,
 VoiceOver, local data and performance have been verified. Flutter/Dart may
 remain a headless backend; no full Swift backend rewrite is required.
 
