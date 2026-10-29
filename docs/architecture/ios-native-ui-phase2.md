@@ -42,15 +42,26 @@ Implemented in the staged native Library:
   library entries with a native confirmation; removal keeps downloaded files.
 - Unread/downloaded count badges, custom covers, cover request headers,
   continue-reading buttons, pull-to-refresh and native context menus.
+- Native horizontal Continue Reading shelf sourced from the existing
+  batched history resolver; tapping opens the exact chapter via the native
+  reader route (no new history storage).
+- Native overflow actions for update, random novel and EPUB import with
+  split/one-chapter choice; file selection and EPUB processing remain in the
+  existing Dart file-picker / Rust EPUB pipeline.
+- Native collection management with create, rename, hide/show,
+  skip-update, drag-to-reorder and confirmed deletion, all routed to the
+  current CategoryRepository and category-deletion sync notification.
+- Native alerts for Dart repository/import errors, instead of silently
+  abandoning an operation.
 
 **Still required before the default route can switch:**
-- Native `ContinueShelf` and complete history-based continuation UI.
-- Native category creation/editing and category management navigation.
-- EPUB import using a native document picker and the existing import service.
-- Migrate and downloaded-file deletion actions with native confirmation UI.
-- Display-specific badges/cover style parity and full list/grid options.
-- Search, selected category and scroll-position restoration across tab changes.
+- Full migration and downloaded-file deletion actions with native
+  confirmation UI while preserving repository/download cleanup rules.
+- Display-specific badges and cover-style parity across all grid modes.
+- Search, selected category, shelf and scroll-position restoration across
+  route/tab changes; error and empty-state polish.
 - iOS build, real-device performance, VoiceOver and large-type testing.
+- Native novel details and remaining tab screens as later Phase 2 stages.
 Do not promote the preview until these gates pass.
 
 ### 2.2 — Native novel details
