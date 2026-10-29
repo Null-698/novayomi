@@ -250,6 +250,12 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       } else if call.method == "refreshComplete" {
         self.refresh.endRefreshing()
         result(nil)
+      } else if call.method == "error", let message = call.arguments as? String {
+        let alert = UIAlertController(title: "Library action failed",
+          message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        self.presentNative(alert)
+        result(nil)
       } else {
         result(FlutterMethodNotImplemented)
       }
