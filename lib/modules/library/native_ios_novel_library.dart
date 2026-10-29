@@ -371,6 +371,9 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     required Set<int> downloadedIds,
     required bool showDownloaded,
     required bool showContinue,
+    required bool showLocal,
+    required bool showLanguage,
+    required bool showSource,
   }) {
     final cache = <String, Map<String, String>>{};
     return [
@@ -381,7 +384,11 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
             'name': book.name ?? 'Untitled',
             'author': book.author ?? '',
             'source': book.source ?? '',
+            'language': book.lang ?? '',
             'genre': book.genre ?? const <String>[],
+            'localBadge': showLocal,
+            'languageBadge': showLanguage,
+            'sourceBadge': showSource,
             'cover': toImgUrl(book.customCoverFromTracker ?? book.imageUrl ?? ''),
             'categories': book.categories ?? const <int>[],
             'chapterCount': book.chapters.length,
@@ -528,7 +535,10 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           settings: settings,
           downloadedIds: downloadedIds,
           showDownloaded: downloadBadges,
-          showContinue: continueButtons),
+          showContinue: continueButtons,
+          showLocal: localBadges,
+          showLanguage: languageBadges,
+          showSource: sourceBadges),
       'continueItems': <Map<String, Object?>>[
         for (final item in continueList)
           if (item.manga.id != null && item.chapter.id != null)
