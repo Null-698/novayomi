@@ -44,6 +44,7 @@ import 'package:mangayomi/modules/browse/global_search/global_search_screen.dart
 import 'package:mangayomi/modules/main_view/main_screen.dart';
 import 'package:mangayomi/modules/history/history_screen.dart';
 import 'package:mangayomi/modules/library/library_screen.dart';
+import 'package:mangayomi/modules/library/native_ios_novel_library.dart';
 import 'package:mangayomi/modules/manga/detail/manga_detail_main.dart';
 import 'package:mangayomi/modules/manga/home/manga_home_screen.dart';
 import 'package:mangayomi/modules/more/about/about_screen.dart';
@@ -191,8 +192,17 @@ class RouterNotifier extends ChangeNotifier {
         _branch(
           _genericRoute<String?>(
             name: "NovelLibrary",
+            // Native UIKit Library can be explicitly previewed on iOS.
+            // Normal builds retain the current feature-complete screen until
+            // the migration checklist and device tests are finished.
             builder: (id) =>
-                LibraryScreen(itemType: ItemType.novel, presetInput: id),
+                defaultTargetPlatform == TargetPlatform.iOS &&
+                    const bool.fromEnvironment(
+                      'NOVAYOMI_NATIVE_LIBRARY_PREVIEW',
+                      defaultValue: false,
+                    )
+                ? const NativeIosNovelLibrary()
+                : LibraryScreen(itemType: ItemType.novel, presetInput: id),
           ),
         ),
         _branch(
