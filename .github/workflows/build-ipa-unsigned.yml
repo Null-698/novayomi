@@ -16,7 +16,7 @@ jobs:
   build-ipa-unsigned:
     permissions:
       contents: write
-    runs-on: macos-26
+    runs-on: macos-26-intel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,7 +27,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-          architecture: arm64
+          architecture: x64
           cache: true
 
       - name: Setup Rust toolchain
