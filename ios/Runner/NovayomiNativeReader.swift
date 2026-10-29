@@ -1230,7 +1230,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
       button.setTitleColor(foregrounds[index], for: .normal)
       button.backgroundColor = backgrounds[index]
       button.layer.cornerRadius = 16
-      button.heightAnchor.constraint(equalToConstant: 72).isActive = true
+      button.heightAnchor.constraint(equalToConstant: 56).isActive = true
       button.addTarget(self, action: #selector(themeCardTapped(_:)), for: .touchUpInside)
       return button
     }
@@ -1346,19 +1346,42 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   }
 
   private func section(_ title: String, children: [UIView]) -> UIView {
-    let wrapper = UIStackView()
-    wrapper.axis = .vertical
-    wrapper.spacing = 12
-    wrapper.isLayoutMarginsRelativeArrangement = true
-    wrapper.layoutMargins = UIEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
-    wrapper.backgroundColor = .secondarySystemGroupedBackground
-    wrapper.layer.cornerRadius = 18
+    // Mirrors NovelSettingSection: the heading is ABOVE its group, not
+    // buried in the card. All controls remain native UIKit elements.
+    let section = UIStackView()
+    section.axis = .vertical
+    section.spacing = 8
+
     let heading = UILabel()
     heading.text = title
-    heading.font = .preferredFont(forTextStyle: .headline)
-    wrapper.addArrangedSubview(heading)
-    children.forEach(wrapper.addArrangedSubview)
-    return wrapper
+    heading.font = .preferredFont(forTextStyle: .subheadline)
+    heading.textColor = .label
+    let accent = UIView()
+    accent.backgroundColor = .tintColor
+    accent.layer.cornerRadius = 2
+    accent.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      accent.widthAnchor.constraint(equalToConstant: 3),
+      accent.heightAnchor.constraint(equalToConstant: 15)
+    ])
+    let header = UIStackView(arrangedSubviews: [accent, heading])
+    header.axis = .horizontal
+    header.alignment = .center
+    header.spacing = 8
+    header.isLayoutMarginsRelativeArrangement = true
+    header.layoutMargins = UIEdgeInsets(top: 4, left: 3, bottom: 0, right: 3)
+    section.addArrangedSubview(header)
+
+    let card = UIStackView()
+    card.axis = .vertical
+    card.spacing = 12
+    card.isLayoutMarginsRelativeArrangement = true
+    card.layoutMargins = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+    card.backgroundColor = .secondarySystemGroupedBackground
+    card.layer.cornerRadius = 16
+    children.forEach(card.addArrangedSubview)
+    section.addArrangedSubview(card)
+    return section
   }
 
   private func horizontalRow(_ views: [UIView]) -> UIView {
