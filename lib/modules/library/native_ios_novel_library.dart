@@ -42,6 +42,9 @@ class NativeIosNovelLibrary extends ConsumerStatefulWidget {
 }
 
 class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
+  // Ephemeral presentation state only, never a second persistent database.
+  // Survives tab/route reconstruction during this app session.
+  static Map<String, Object?> _lastViewState = <String, Object?>{};
   MethodChannel? _channel;
   List<Manga> _allEntries = const [];
   Settings? _settings;
@@ -80,6 +83,16 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
   Future<void> _handleAction(MethodCall call) async {
     if (!mounted) return;
     switch (call.method) {
+      case 'uiState':
+        final current = call.arguments;
+        if (current is Map) {
+          _lastViewState = {
+            for (final entry in current.entries)
+              if (entry.key is String && (entry.value is String ||
+                  entry.value is bool || entry.value is num || entry.value == null))
+                entry.key as String: entry.value,
+          };
+        }
       case 'open':
         final id = call.arguments;
         if (id is! int) return;
@@ -529,6 +542,7 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     ));
     _payload = <String, Object?>{
       'title': 'Novels',
+      'uiState': _lastViewState,
       // Keep the full source list separate from visible IDs, so the native
       // search bar can temporarily ignore current filters just as Flutter did.
       'items': _serialize(books,
@@ -571,7 +585,9 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
             },
       ],
       'categories': <Map<String, Object?>>[
-        for (final c in (categories ?? []).where((c) => c.hide != true))
+        for (final c in ([...?categories]
+            ..sort((a, b) => (a.pos ?? 0).compareTo(b.pos ?? 0)))
+            .where((c) => c.hide != true))
           if (c.id != null) <String, Object?>{
             'id': c.id, 'name': c.name ?? 'Collection',
           },
