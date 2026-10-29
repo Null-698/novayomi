@@ -36,6 +36,7 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
   private var tabs: UITabBar?
   private var navigation: UINavigationBar?
   private var toolbar: UIToolbar?
+  private var readerBottom: NovayomiReaderBottomView?
   private var currentTabs: [UITabBarItem] = []
   private var canOpenWeb = false
   private var canRefresh = false
@@ -67,6 +68,18 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
       control.isTranslucent = true
       toolbar = control
       mount(control)
+    case "readerBottom":
+      let control = NovayomiReaderBottomView(frame: .zero)
+      control.onAction = { [weak self] action in self?.emit(action) }
+      control.onSeek = { [weak self] progress in
+        self?.channel.invokeMethod("seek", arguments: progress)
+      }
+      readerBottom = control
+      mount(control)
+    case "readerEdgeTop":
+      mount(NovayomiReaderEdgeView(top: true))
+    case "readerEdgeBottom":
+      mount(NovayomiReaderEdgeView(top: false))
     default:
       break
     }
@@ -127,6 +140,8 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
       configureReaderNavigation(args)
     case "readerToolbar":
       configureReaderToolbar(args)
+    case "readerBottom":
+      readerBottom?.update(args)
     default:
       break
     }
@@ -241,3 +256,170 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
     channel.invokeMethod("action", arguments: action)
   }
 }
+
+
+/// Platform-native blur at the content edge. Flutter's scroll view is not a
+/// UIKit UIScrollView, so it cannot participate in the automatic scroll-edge
+/// interaction. This native material is graduated to let the book run beneath
+/// the status bar and reader controls without having text clash with them.
+private final class NovayomiReaderEdgeView: UIView {
+  private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+  private let gradient = CAGradientLayer()
+
+  init(top: Bool) {
+    super.init(frame: .zero)
+    isUserInteractionEnabled = false
+    backgroundColor = .clear
+    blur.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(blur)
+    NSLayoutConstraint.activate([
+      blur.topAnchor.constraint(equalTo: topAnchor),
+      blur.bottomAnchor.constraint(equalTo: bottomAnchor),
+      blur.leadingAnchor.constraint(equalTo: leadingAnchor),
+      blur.trailingAnchor.constraint(equalTo: trailingAnchor)
+    ])
+    // Fade native blur away from the actual controls; no solid opaque bar.
+    gradient.colors = top
+      ? [UIColor.white.cgColor, UIColor.white.cgColor, UIColor.clear.cgColor]
+      : [UIColor.clear.cgColor, UIColor.white.cgColor, UIColor.white.cgColor]
+    gradient.locations = top ? [0, 0.38, 1] : [0, 0.62, 1]
+    gradient.startPoint = CGPoint(x: 0.5, y: 0)
+    gradient.endPoint = CGPoint(x: 0.5, y: 1)
+    blur.layer.mask = gradient
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    gradient.frame = blur.bounds
+  }
+}
+
+/// A unified reader control surface backed by *real* UIKit system glass.
+/// UIGlassEffect(.regular) follows the platform's own iOS 26/27 appearance,
+/// accessibility settings, and iOS 27 frosted-glass preference.
+private final class NovayomiReaderBottomView: UIView {
+  var onAction: ((String) -> Void)?
+  var onSeek: ((Double) -> Void)?
+
+  private let glass: UIVisualEffectView
+  private let previous = UIButton(type: .system)
+  private let next = UIButton(type: .system)
+  private let progress = UISlider()
+  private let currentLabel = UILabel()
+  private let totalLabel = UILabel()
+  private var actions: [String: UIButton] = [:]
+
+  override init(frame: CGRect) {
+    if #available(iOS 26.0, *) {
+      glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    } else {
+      glass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    }
+    super.init(frame: frame)
+    backgroundColor = .clear
+
+    glass.translatesAutoresizingMaskIntoConstraints = false
+    glass.layer.cornerRadius = 26
+    glass.clipsToBounds = true
+    addSubview(glass)
+    NSLayoutConstraint.activate([
+      glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+      glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+      glass.topAnchor.constraint(equalTo: topAnchor),
+      glass.bottomAnchor.constraint(equalTo: bottomAnchor)
+    ])
+
+    configureButton(previous, symbol: "backward.end.fill", identifier: "previousChapter")
+    configureButton(next, symbol: "forward.end.fill", identifier: "nextChapter")
+    for label in [currentLabel, totalLabel] {
+      label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+      label.textColor = .label
+      label.textAlignment = .center
+      label.setContentCompressionResistancePriority(.required, for: .horizontal)
+      label.widthAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
+    }
+    progress.minimumValue = 0
+    progress.maximumValue = 1
+    progress.minimumTrackTintColor = .label
+    progress.maximumTrackTintColor = .tertiaryLabel
+    progress.accessibilityLabel = "Reading progress"
+    progress.addTarget(self, action: #selector(seekChanged(_:)), for: .valueChanged)
+
+    let top = UIStackView(arrangedSubviews: [
+      previous, currentLabel, progress, totalLabel, next
+    ])
+    top.axis = .horizontal
+    top.alignment = .center
+    top.spacing = 7
+    top.translatesAutoresizingMaskIntoConstraints = false
+
+    let symbols: [(String, String)] = [
+      ("chapters", "list.number"), ("font", "textformat.size"),
+      ("layout", "book.closed"), ("tts", "waveform"),
+      ("settings", "slider.horizontal.3")
+    ]
+    let bottom = UIStackView()
+    bottom.axis = .horizontal
+    bottom.distribution = .fillEqually
+    bottom.alignment = .center
+    bottom.translatesAutoresizingMaskIntoConstraints = false
+    for (name, symbol) in symbols {
+      let button = UIButton(type: .system)
+      configureButton(button, symbol: symbol, identifier: name)
+      actions[name] = button
+      bottom.addArrangedSubview(button)
+    }
+
+    glass.contentView.addSubview(top)
+    glass.contentView.addSubview(bottom)
+    NSLayoutConstraint.activate([
+      top.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 10),
+      top.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -10),
+      top.topAnchor.constraint(equalTo: glass.contentView.topAnchor, constant: 9),
+      top.heightAnchor.constraint(equalToConstant: 44),
+      bottom.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 8),
+      bottom.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -8),
+      bottom.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 4),
+      bottom.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor, constant: -8)
+    ])
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+  private func configureButton(_ button: UIButton, symbol: String, identifier: String) {
+    button.setImage(UIImage(systemName: symbol), for: .normal)
+    button.tintColor = .label
+    button.accessibilityIdentifier = identifier
+    button.accessibilityLabel = identifier
+    button.addTarget(self, action: #selector(buttonPressed(_:)), for: .touchUpInside)
+    button.heightAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
+    button.widthAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
+  }
+
+  func update(_ args: [String: Any]) {
+    currentLabel.text = args["current"] as? String ?? ""
+    totalLabel.text = args["total"] as? String ?? ""
+    if !progress.isTracking {
+      progress.value = Float(min(max(args["progress"] as? Double ?? 0, 0), 1))
+    }
+    previous.isEnabled = args["hasPrevious"] as? Bool ?? false
+    next.isEnabled = args["hasNext"] as? Bool ?? false
+    actions["tts"]?.isHidden = !(args["ttsSupported"] as? Bool ?? false)
+    actions["tts"]?.tintColor = (args["ttsActive"] as? Bool ?? false)
+      ? .systemBlue : .label
+    let layoutSymbol = args["layoutSymbol"] as? String ?? "book.closed"
+    actions["layout"]?.setImage(UIImage(systemName: layoutSymbol), for: .normal)
+  }
+
+  @objc private func buttonPressed(_ sender: UIButton) {
+    guard sender.isEnabled, let action = sender.accessibilityIdentifier else { return }
+    onAction?(action)
+  }
+
+  @objc private func seekChanged(_ sender: UISlider) {
+    onSeek?(Double(sender.value))
+  }
+}
+

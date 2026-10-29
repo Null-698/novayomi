@@ -11,12 +11,14 @@ class NativeIosBar extends StatefulWidget {
     required this.data,
     this.onSelected,
     this.onAction,
+    this.onSeek,
   });
 
   final String kind;
   final Map<String, Object?> data;
   final ValueChanged<int>? onSelected;
   final ValueChanged<String>? onAction;
+  final ValueChanged<double>? onSeek;
 
   @override
   State<NativeIosBar> createState() => _NativeIosBarState();
@@ -47,6 +49,8 @@ class _NativeIosBarState extends State<NativeIosBar> {
         widget.onSelected?.call(call.arguments as int);
       } else if (call.method == 'action' && call.arguments is String) {
         widget.onAction?.call(call.arguments as String);
+      } else if (call.method == 'seek' && call.arguments is num) {
+        widget.onSeek?.call((call.arguments as num).toDouble());
       }
     });
     _updateNative();
