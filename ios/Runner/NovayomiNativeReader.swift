@@ -140,7 +140,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private func htmlDocument() -> String {
     let background = cssColor("background", fallback: "#292832")
     let foreground = cssColor("foreground", fallback: "#CCCCCC")
-    let paragraphSpace = chapter["compactParagraphs"] as? Bool ?? false ? 4 : 8
+    let paragraphSpace = (chapter["compactParagraphs"] as? Bool ?? false) ? 4 : 8
     let padding = max(6, min(chapter["padding"] as? Int ?? 16, 64))
     let alignment = ["left", "right", "center", "justify"].contains(safeString("alignment", fallback: "left"))
       ? safeString("alignment", fallback: "left") : "left"
@@ -153,7 +153,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       "-apple-system, BlinkMacSystemFont, serif"
     let modeStyle: String
     if readingMode == "pages" {
-      modeStyle = "html,body{height:100%;overflow:hidden} #book{height:100vh;column-width:100vw;column-gap:0;column-fill:auto;overflow-x:auto;overflow-y:hidden;box-sizing:border-box}"
+      modeStyle = "html,body{height:100%;overflow-x:visible;overflow-y:hidden} #book{height:100vh;width:100vw;column-width:100vw;column-gap:0;column-fill:auto;overflow:visible;box-sizing:border-box}"
     } else {
       modeStyle = "html,body{min-height:100%;overflow-x:hidden} #book{box-sizing:border-box;min-height:100%;}"
     }
@@ -196,6 +196,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     didInitialLoad = true
     applyingProgress = false
     webView.scrollView.isPagingEnabled = readingMode == "pages"
+    webView.scrollView.alwaysBounceVertical = readingMode != "pages"
+    webView.scrollView.alwaysBounceHorizontal = readingMode == "pages"
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
       self.restoreProgress(self.currentProgress)
