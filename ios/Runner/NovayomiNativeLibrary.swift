@@ -672,6 +672,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private let title = UILabel()
   private let author = UILabel()
   private let badge = UILabel()
+  private let readingProgress = UIProgressView(progressViewStyle: .bar)
   private let resume = UIButton(type: .system)
   var onResume: (() -> Void)?
   private let stack = UIStackView()
@@ -706,7 +707,15 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     resume.translatesAutoresizingMaskIntoConstraints = false
     resume.addTarget(self, action: #selector(resumeTapped), for: .touchUpInside)
     cover.addSubview(resume)
+    readingProgress.progressTintColor = .systemBlue
+    readingProgress.trackTintColor = UIColor.secondarySystemBackground.withAlphaComponent(0.75)
+    readingProgress.translatesAutoresizingMaskIntoConstraints = false
+    cover.addSubview(readingProgress)
     NSLayoutConstraint.activate([
+      readingProgress.leadingAnchor.constraint(equalTo: cover.leadingAnchor),
+      readingProgress.trailingAnchor.constraint(equalTo: cover.trailingAnchor),
+      readingProgress.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
+      readingProgress.heightAnchor.constraint(equalToConstant: 3),
       badge.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 5),
       badge.topAnchor.constraint(equalTo: cover.topAnchor, constant: 5),
       badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
@@ -754,6 +763,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     represented = ""
     onResume = nil
     badge.isHidden = true
+    readingProgress.isHidden = true
     resume.isHidden = true
     cover.image = UIImage(systemName: "book.closed")
   }
@@ -771,6 +781,12 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     badge.text = unread > 0 ? "  \(unread)  " : "  \(downloaded)  "
     badge.isHidden = unread == 0 && downloaded == 0
     resume.isHidden = !(item["showContinue"] as? Bool ?? false)
+    if let progress = item["progress"] as? Double {
+      readingProgress.isHidden = false
+      readingProgress.progress = Float(max(0, min(1, progress)))
+    } else {
+      readingProgress.isHidden = true
+    }
     cover.image = UIImage(systemName: "book.closed")
 
     if isList {
