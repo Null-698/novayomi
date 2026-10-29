@@ -56,8 +56,24 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
   void _created(int id) {
     final channel = MethodChannel('novayomi/native-library/$id');
     _channel = channel;
-    channel.setMethodCallHandler(_handleAction);
+    channel.setMethodCallHandler(_handleNativeCall);
     _sendUpdate();
+  }
+
+  Future<void> _handleNativeCall(MethodCall call) async {
+    try {
+      await _handleAction(call);
+    } catch (error, stack) {
+      debugPrint('Native iOS Library action failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        try {
+          await _channel?.invokeMethod<void>('error', error.toString());
+        } catch (_) {
+          // No additional UI error if the view has already been disposed.
+        }
+      }
+    }
   }
 
   Future<void> _handleAction(MethodCall call) async {
