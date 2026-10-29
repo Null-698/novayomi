@@ -23,6 +23,10 @@ import UniformTypeIdentifiers
   private var audioModeBeforeReading: AVAudioSession.Mode = .default
   private var audioOptionsBeforeReading: AVAudioSession.CategoryOptions = []
   private var settingVolume = false
+  // Phase 1: a real UIViewController reader, not a Flutter platform view.
+  private var nativeNovelReader: NovayomiNativeReaderController?
+  private var nativeNovelReaderChannel: FlutterMethodChannel?
+
   // The screen's brightness before a reader set its own, given back on
   // "reset".
   private var brightnessBeforeReading: CGFloat?
@@ -42,6 +46,63 @@ import UniformTypeIdentifiers
       )
     }
     let messenger = engineBridge.applicationRegistrar.messenger()
+
+    let readerChannel = FlutterMethodChannel(
+      name: "novayomi/native-reader",
+      binaryMessenger: messenger
+    )
+    nativeNovelReaderChannel = readerChannel
+    readerChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "unavailable", message: "App delegate released", details: nil))
+        return
+      }
+      switch call.method {
+      case "open":
+        guard self.nativeNovelReader == nil,
+              let args = call.arguments as? [String: Any] else {
+          result(FlutterError(code: "already_open", message: "Reader already presented", details: nil))
+          return
+        }
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+          result(FlutterError(code: "no_window", message: "No active iOS window", details: nil))
+          return
+        }
+        var presenter = root
+        while let presented = presenter.presentedViewController {
+          presenter = presented
+        }
+        let reader = NovayomiNativeReaderController(chapter: args)
+        self.nativeNovelReader = reader
+        reader.onEvent = { [weak self] payload in
+          self?.nativeNovelReaderChannel?.invokeMethod("event", arguments: payload)
+        }
+        reader.onDismiss = { [weak self] in self?.nativeNovelReader = nil }
+        let navigation = UINavigationController(rootViewController: reader)
+        navigation.modalPresentationStyle = .fullScreen
+        navigation.isModalInPresentation = true
+        presenter.present(navigation, animated: true)
+        result(nil)
+      case "replaceChapter":
+        guard let args = call.arguments as? [String: Any],
+              let reader = self.nativeNovelReader else {
+          result(FlutterError(code: "no_reader", message: "Reader is closed", details: nil))
+          return
+        }
+        reader.replaceChapter(args)
+        result(nil)
+      case "showError":
+        if let args = call.arguments as? String {
+          self.nativeNovelReader?.showLoadingError(args)
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
 
     let backgroundTaskChannel = FlutterMethodChannel(
       name: "com.kodjodevf.mangayomi.background_task",
