@@ -6,7 +6,7 @@ import AVFoundation
 /// chapter text or supplies a platform-view overlay while this controller is
 /// on screen: the full hierarchy is UIKit + WKWebView + UIScrollView.
 final class NovayomiNativeReaderController: UIViewController, WKNavigationDelegate,
-    UIScrollViewDelegate, AVSpeechSynthesizerDelegate {
+    UIScrollViewDelegate, AVSpeechSynthesizerDelegate, UIGestureRecognizerDelegate {
 
   var onEvent: (([String: Any]) -> Void)?
   var onDismiss: (() -> Void)?
@@ -21,7 +21,10 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private var lastReportedProgress = -1.0
   private var lastReportTime = Date.distantPast
   private var didInitialLoad = false
+  // Stable insets: changing these during a drag forces WKWebView to jump.
   private var contentInsets = UIEdgeInsets.zero
+  private var didConfigureInsets = false
+  private var didReportClose = false
   private var fontSize: Int
   private var lineHeight: Double
   private var readingMode: String
@@ -68,9 +71,19 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     extendedLayoutIncludesOpaqueBars = true
 
     let tap = UITapGestureRecognizer(target: self, action: #selector(toggleChrome))
+    tap.delegate = self
     tap.cancelsTouchesInView = false
-    tap.numberOfTapsRequired = 1
-    webView.scrollView.addGestureRecognizer(tap)
+    // The gesture belongs to the controller, not the inner WebKit scroll view,
+    // so taps still work when WKContentView consumes content touch events.
+    view.addGestureRecognizer(tap)
+
+    // Flutter owns the detail route, so an interactivePopGestureRecognizer
+    // cannot work here: the native reader is a modal root controller. Install
+    // a UIKit left-edge back swipe instead.
+    let backSwipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleBackSwipe(_:)))
+    backSwipe.edges = .left
+    backSwipe.delegate = self
+    view.addGestureRecognizer(backSwipe)
 
     progressControl.minimumValue = 0
     progressControl.maximumValue = 1
@@ -85,11 +98,21 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
-    navigationController?.setNavigationBarHidden(false, animated: false)
-    navigationController?.setToolbarHidden(false, animated: false)
-    navigationController?.navigationBar.isTranslucent = true
-    navigationController?.toolbar.isTranslucent = true
+    overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+    navigationController?.overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+    navigationController?.setNavigationBarHidden(!chromeVisible, animated: false)
+    navigationController?.setToolbarHidden(!chromeVisible, animated: false)
     navigationController?.navigationBar.prefersLargeTitles = false
+    // Remove the rectangular bar haze. UIKit still owns the individual
+    // native Liquid Glass bar-button surfaces on iOS 26+.
+    let clear = UINavigationBarAppearance()
+    clear.configureWithTransparentBackground()
+    navigationController?.navigationBar.standardAppearance = clear
+    navigationController?.navigationBar.scrollEdgeAppearance = clear
+    navigationController?.navigationBar.compactAppearance = clear
+    navigationController?.navigationBar.compactScrollEdgeAppearance = clear
+    navigationController?.navigationBar.tintColor = .label
+    navigationController?.toolbar.isTranslucent = true
   }
 
   override func viewDidLayoutSubviews() {
@@ -97,20 +120,26 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     // The actual WKWebView scroll view extends behind the Dynamic Island and
     // UIKit toolbar, so iOS 26+ supplies its scroll-edge treatment natively.
     // Insets ensure the beginning and end of a chapter remain readable.
-    let safeTop = view.safeAreaInsets.top
-    let safeBottom = view.safeAreaInsets.bottom
-    let top = max(60, safeTop + (chromeVisible ? 56 : 10))
-    let bottom = max(50, safeBottom + (chromeVisible ? 62 : 10))
-    if abs(contentInsets.top - top) > 0.5 || abs(contentInsets.bottom - bottom) > 0.5 {
-      let oldProgress = progressFraction()
-      contentInsets = UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0)
-      webView.scrollView.contentInset = contentInsets
-      webView.scrollView.verticalScrollIndicatorInsets = contentInsets
-      if didInitialLoad { restoreProgress(oldProgress) }
-    }
+    guard !didConfigureInsets, view.bounds.height > 0 else { return }
+    // The inset is fixed for the entire chapter. It does not change when
+    // chrome hides, status-bar visibility changes, or a drag is in progress.
+    let top = max(110, view.window?.safeAreaInsets.top ?? 0)
+    let bottom = max(102, view.window?.safeAreaInsets.bottom ?? 0)
+    contentInsets = UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0)
+    webView.scrollView.contentInset = contentInsets
+    webView.scrollView.scrollIndicatorInsets = contentInsets
+    didConfigureInsets = true
   }
 
-  override var prefersStatusBarHidden: Bool { false }
+  override var prefersStatusBarHidden: Bool { !chromeVisible }
+  override var preferredStatusBarStyle: UIStatusBarStyle { isDarkBook ? .lightContent : .darkContent }
+
+  private var isDarkBook: Bool {
+    let rgba = readerBackground().cgColor.components ?? [0, 0, 0, 1]
+    guard rgba.count >= 3 else { return true }
+    let luminance = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
+    return luminance < 0.53
+  }
 
   private func safeString(_ name: String, fallback: String) -> String {
     chapter[name] as? String ?? fallback
@@ -247,6 +276,22 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     progressControl.value = Float(value)
   }
 
+  func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    if chromeVisible { setChromeVisible(false) }
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    return true
+  }
+
+  @objc private func handleBackSwipe(_ gesture: UIScreenEdgePanGestureRecognizer) {
+    guard gesture.state == .ended else { return }
+    if gesture.translation(in: view).x > 75 {
+      closeReader()
+    }
+  }
+
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
     guard didInitialLoad && !applyingProgress else { return }
     currentProgress = progressFraction()
@@ -257,8 +302,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private func reportProgress(force: Bool) {
     let now = Date()
     guard force ||
-      (now.timeIntervalSince(lastReportTime) >= 0.35 &&
-       abs(currentProgress - lastReportedProgress) >= 0.0008) else { return }
+      (now.timeIntervalSince(lastReportTime) >= 1.0 &&
+       abs(currentProgress - lastReportedProgress) >= 0.003) else { return }
     lastReportTime = now
     lastReportedProgress = currentProgress
     onEvent?(["type": "progress", "value": currentProgress])
@@ -295,7 +340,6 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     ]
     // No custom gradients, opaque bar backgrounds, or Flutter overlays.
     navigationController?.toolbar.tintColor = .label
-    navigationController?.navigationBar.tintColor = .label
   }
 
   private func makeMenu() -> UIMenu {
@@ -392,11 +436,18 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     updateBars()
   }
 
+  private func setChromeVisible(_ visible: Bool) {
+    guard chromeVisible != visible else { return }
+    chromeVisible = visible
+    navigationController?.setNavigationBarHidden(!visible, animated: true)
+    navigationController?.setToolbarHidden(!visible, animated: true)
+    navigationController?.setNeedsStatusBarAppearanceUpdate()
+    setNeedsStatusBarAppearanceUpdate()
+    // No scroll inset changes or progress restoration while chrome animates.
+  }
+
   @objc private func toggleChrome() {
-    chromeVisible.toggle()
-    navigationController?.setNavigationBarHidden(!chromeVisible, animated: true)
-    navigationController?.setToolbarHidden(!chromeVisible, animated: true)
-    view.setNeedsLayout()
+    setChromeVisible(!chromeVisible)
   }
 
   @objc private func progressChanged(_ sender: UISlider) {
@@ -419,6 +470,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   @objc private func nextChapter() { onEvent?(["type":"next"]) }
 
   @objc private func closeReader() {
+    guard !didReportClose else { return }
+    didReportClose = true
     reportProgress(force: true)
     speech.stopSpeaking(at: .immediate)
     dismiss(animated: true) { [weak self] in
