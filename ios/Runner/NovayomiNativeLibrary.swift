@@ -594,16 +594,21 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   @objc private func confirmRemove() {
     guard !selectedIds.isEmpty else { return }
-    let count = selectedIds.count
-    let sheet = UIAlertController(
-      title: "Remove \(count) novel\(count == 1 ? "" : "s") from Library?",
-      message: "Only the library entries will be removed. Downloaded files will be kept.",
-      preferredStyle: .alert)
-    sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-    sheet.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-      self?.performBatch("removeFromLibrary")
-    })
-    presentNative(sheet)
+    let chosen = selectedIds
+    let hasLocal = entries.contains { item in
+      guard let id = item["id"] as? Int, chosen.contains(id) else { return false }
+      return item["isLocal"] as? Bool ?? false
+    }
+    let sheet = NovayomiLibraryRemovalSheet(count: chosen.count, hasLocalArchives: hasLocal) {
+      [weak self] removeLibrary, deleteDownloads in
+      guard let self else { return }
+      self.channel.invokeMethod("batch", arguments: [
+        "kind": "remove", "ids": Array(chosen),
+        "removeFromLibrary": removeLibrary, "deleteDownloads": deleteDownloads
+      ] as [String: Any])
+      self.clearSelection()
+    }
+    presentSheet(sheet)
   }
 
   private func presentNative(_ child: UIViewController) {
@@ -1211,4 +1216,98 @@ private final class NovayomiLibraryCategoryManager: UITableViewController {
   }
 
   @objc private func done() { dismiss(animated: true) }
+}
+
+
+/// UIKit equivalent of Flutter's showDeleteMangaDialog. Both toggles are
+/// independent. The actual delete transaction/file cleanup is the unchanged
+/// Dart implementation shared with the original Flutter dialog.
+private final class NovayomiLibraryRemovalSheet: UIViewController {
+  private let numberOfNovels: Int
+  private let hasLocalArchives: Bool
+  private let onConfirm: (Bool, Bool) -> Void
+  private let removeLibrary = UISwitch()
+  private let deleteDownloads = UISwitch()
+  private let deleteButton = UIButton(type: .system)
+  private let warning = UILabel()
+
+  init(count: Int, hasLocalArchives: Bool, onConfirm: @escaping (Bool, Bool) -> Void) {
+    numberOfNovels = count
+    self.hasLocalArchives = hasLocalArchives
+    self.onConfirm = onConfirm
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  required init?(coder: NSCoder) { fatalError("No storyboard") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Remove · \(numberOfNovels)"
+    view.backgroundColor = .systemGroupedBackground
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
+    removeLibrary.isOn = false
+    deleteDownloads.isOn = false
+    removeLibrary.addTarget(self, action: #selector(updateChoice), for: .valueChanged)
+    deleteDownloads.addTarget(self, action: #selector(updateChoice), for: .valueChanged)
+
+    let form = UIStackView()
+    form.axis = .vertical
+    form.spacing = 22
+    form.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(form)
+
+    func settingRow(_ text: String, control: UISwitch) -> UIView {
+      let label = UILabel()
+      label.text = text
+      label.font = .preferredFont(forTextStyle: .body)
+      label.numberOfLines = 0
+      let row = UIStackView(arrangedSubviews: [label, control])
+      row.axis = .horizontal
+      row.alignment = .center
+      row.spacing = 16
+      return row
+    }
+
+    form.addArrangedSubview(settingRow("Remove from Library", control: removeLibrary))
+    form.addArrangedSubview(settingRow("Delete downloaded chapters / local EPUB files",
+                                     control: deleteDownloads))
+    warning.font = .preferredFont(forTextStyle: .footnote)
+    warning.textColor = .secondaryLabel
+    warning.numberOfLines = 0
+    form.addArrangedSubview(warning)
+    deleteButton.configuration = .filled()
+    deleteButton.configuration?.baseBackgroundColor = .systemRed
+    deleteButton.setTitle("Remove", for: .normal)
+    deleteButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+    deleteButton.addTarget(self, action: #selector(confirm), for: .touchUpInside)
+    form.addArrangedSubview(deleteButton)
+
+    NSLayoutConstraint.activate([
+      form.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 22),
+      form.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -22),
+      form.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 26)
+    ])
+    updateChoice()
+  }
+
+  @objc private func updateChoice() {
+    deleteButton.isEnabled = removeLibrary.isOn || deleteDownloads.isOn
+    if deleteDownloads.isOn && hasLocalArchives {
+      warning.text = "Warning: selected local EPUB archives will be deleted permanently. This also removes their Library entries."
+    } else if deleteDownloads.isOn {
+      warning.text = "Downloaded chapters will be deleted, but novel entries and chapter metadata can remain for re-downloading."
+    } else {
+      warning.text = "Removing novels from Library does not delete downloaded chapters."
+    }
+  }
+
+  @objc private func confirm() {
+    let fromLibrary = removeLibrary.isOn
+    let downloads = deleteDownloads.isOn
+    guard fromLibrary || downloads else { return }
+    dismiss(animated: true) { [onConfirm] in onConfirm(fromLibrary, downloads) }
+  }
+
+  @objc private func cancel() { dismiss(animated: true) }
 }
