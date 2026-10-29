@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/models/category.dart';
 import 'package:mangayomi/models/changed.dart';
@@ -93,6 +94,8 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
                 entry.key as String: entry.value,
           };
         }
+      case 'browse':
+        context.go('/browse');
       case 'open':
         final id = call.arguments;
         if (id is! int) return;
