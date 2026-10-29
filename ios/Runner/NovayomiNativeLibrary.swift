@@ -241,9 +241,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       layoutButton.setImage(UIImage(systemName: isList ? "square.grid.2x2" : "list.bullet"),
                             for: .normal)
     }
-    categoryScroll.isHidden = !(data["displaySettings"] as? [String: Bool] ?? [:])
-      .keys.contains("showCategories") ||
-      !(data["displaySettings"] as? [String: Bool] ?? [:])["showCategories", default: true]
+    let appearance = data["displaySettings"] as? [String: Bool] ?? [:]
+    categoryScroll.isHidden = !(appearance["showCategories"] ?? true)
     categoryHeight.constant = categoryScroll.isHidden ? 0 : 42
     updateSortMenu()
     rebuildCategories()
