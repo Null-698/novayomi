@@ -526,6 +526,9 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       showPercent: chapter["showPercent"] as? Bool ?? true,
       compactParagraphs: chapter["compactParagraphs"] as? Bool ?? false,
       tapZones: tapZonesEnabled,
+      volumeKeys: chapter["volumeKeys"] as? Bool ?? false,
+      invertVolume: chapter["invertVolume"] as? Bool ?? false,
+      orientation: chapter["orientation"] as? Int ?? 0,
       autoScroll: autoScrollEnabled,
       autoScrollSpeed: autoScrollSpeed,
       ttsSpeed: ttsSpeed,
@@ -600,6 +603,20 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       tapZonesEnabled = enabled
       chapter["tapZones"] = enabled
       onEvent?(["type": "tapZones", "value": enabled])
+    case "volumeKeys", "invertVolume":
+      guard let enabled = value as? Bool else { return }
+      chapter[key] = enabled
+      onEvent?(["type": key, "value": enabled])
+    case "orientation":
+      guard let orientation = value as? Int else { return }
+      chapter["orientation"] = orientation
+      onEvent?(["type": "orientation", "value": orientation])
+      if #available(iOS 16.0, *),
+         let scene = view.window?.windowScene {
+        let mask: UIInterfaceOrientationMask = orientation == 1 ? .portrait :
+          orientation == 2 ? .landscape : .allButUpsideDown
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+      }
     case "compactParagraphs":
       guard let enabled = value as? Bool else { return }
       chapter["compactParagraphs"] = enabled
@@ -815,6 +832,21 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   @objc private func previousChapter() { onEvent?(["type":"previous"]) }
   @objc private func nextChapter() { onEvent?(["type":"next"]) }
 
+  func handleVolumePage(forward: Bool) {
+    let scroll = webView.scrollView
+    if readingMode == "pages" {
+      let delta: CGFloat = forward ? scroll.bounds.width : -scroll.bounds.width
+      scroll.setContentOffset(
+        CGPoint(x: scroll.contentOffset.x + delta, y: scroll.contentOffset.y),
+        animated: true)
+    } else {
+      let delta: CGFloat = (forward ? 1 : -1) * scroll.bounds.height * 0.83
+      scroll.setContentOffset(
+        CGPoint(x: scroll.contentOffset.x, y: scroll.contentOffset.y + delta),
+        animated: true)
+    }
+  }
+
   @objc private func closeReader() {
     guard !didReportClose else { return }
     didReportClose = true
@@ -962,6 +994,9 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   private let compactParagraphs = UISwitch()
   private let tapZones = UISwitch()
   private let autoScroll = UISwitch()
+  private let volumeKeys = UISwitch()
+  private let invertVolume = UISwitch()
+  private let orientationControl = UISegmentedControl(items: ["Auto", "Portrait", "Landscape"])
   private let autoScrollSpeed = UISlider()
   private let brightness = UISlider()
   private let ttsSpeed = UISlider()
@@ -983,6 +1018,9 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
   private let initialShowPercent: Bool
   private let initialCompact: Bool
   private let initialTapZones: Bool
+  private let initialVolumeKeys: Bool
+  private let initialInvertVolume: Bool
+  private let initialOrientation: Int
   private let initialAutoScroll: Bool
   private let initialAutoScrollSpeed: Double
   private let initialTtsSpeed: Double
@@ -993,6 +1031,7 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
        background: String, foreground: String, alignment: String,
        fontKey: String, pageLayout: String, keepAwake: Bool,
        showPercent: Bool, compactParagraphs: Bool, tapZones: Bool,
+       volumeKeys: Bool, invertVolume: Bool, orientation: Int,
        autoScroll: Bool, autoScrollSpeed: Double,
        ttsSpeed: Double, ttsPitch: Double, ttsLanguage: String?) {
     initialFont = fontSize
@@ -1005,6 +1044,9 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     initialShowPercent = showPercent
     initialCompact = compactParagraphs
     initialTapZones = tapZones
+    initialVolumeKeys = volumeKeys
+    initialInvertVolume = invertVolume
+    initialOrientation = orientation
     initialAutoScroll = autoScroll
     initialAutoScrollSpeed = autoScrollSpeed
     initialTtsSpeed = ttsSpeed
@@ -1092,7 +1134,11 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     compactParagraphs.isOn = initialCompact
     tapZones.isOn = initialTapZones
     autoScroll.isOn = initialAutoScroll
-    for control in [keepAwake, showPercent, compactParagraphs, tapZones, autoScroll] {
+    volumeKeys.isOn = initialVolumeKeys
+    invertVolume.isOn = initialInvertVolume
+    orientationControl.selectedSegmentIndex = max(0, min(2, initialOrientation))
+    orientationControl.addTarget(self, action: #selector(orientationChanged), for: .valueChanged)
+    for control in [keepAwake, showPercent, compactParagraphs, tapZones, autoScroll, volumeKeys, invertVolume] {
       control.addTarget(self, action: #selector(switchChanged(_:)), for: .valueChanged)
     }
     setupSlider(autoScrollSpeed, min: 2, max: 30, value: Float(initialAutoScrollSpeed),
@@ -1158,7 +1204,12 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
       switchRow("Keep screen on", control: keepAwake),
       switchRow("Show reading percentage", control: showPercent),
       switchRow("Remove extra paragraph spacing", control: compactParagraphs),
-      switchRow("Use tap zones for paging", control: tapZones)
+      switchRow("Use tap zones for paging", control: tapZones),
+      switchRow("Volume buttons turn pages", control: volumeKeys),
+      switchRow("Reverse volume page direction", control: invertVolume)
+    ]))
+    form.addArrangedSubview(section("Screen orientation", children: [
+      orientationControl
     ]))
     form.addArrangedSubview(section("Auto-scroll", children: [
       switchRow("Auto-scroll while reading", control: autoScroll),
@@ -1306,8 +1357,13 @@ private final class NovayomiReadingSettingsSheet: UIViewController, UIColorPicke
     else if control === showPercent { key = "showPercent" }
     else if control === compactParagraphs { key = "compactParagraphs" }
     else if control === tapZones { key = "tapZones" }
+    else if control === volumeKeys { key = "volumeKeys" }
+    else if control === invertVolume { key = "invertVolume" }
     else { key = "autoScroll" }
     onChange?(key, control.isOn)
+  }
+  @objc private func orientationChanged() {
+    onChange?("orientation", orientationControl.selectedSegmentIndex)
   }
   @objc private func autoScrollSpeedChanged(_ slider: UISlider) {
     onChange?("autoScrollSpeed", Double(slider.value))
