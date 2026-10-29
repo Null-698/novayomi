@@ -13,6 +13,7 @@ import 'package:mangayomi/modules/library/providers/isar_providers.dart';
 import 'package:mangayomi/modules/library/providers/library_filter_provider.dart';
 import 'package:mangayomi/modules/library/providers/library_state_provider.dart';
 import 'package:mangayomi/modules/library/widgets/library_entry_utils.dart';
+import 'package:mangayomi/modules/library/widgets/library_dialogs.dart';
 import 'package:mangayomi/modules/library/widgets/library_update_runner.dart';
 import 'package:mangayomi/modules/library/widgets/continue_shelf.dart';
 import 'package:mangayomi/modules/library/providers/library_source_badge_provider.dart';
@@ -323,12 +324,21 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
             }
             if (changed.isNotEmpty) await mangaRepository.putAll(changed);
           case 'removeFromLibrary':
-            for (final id in ids) {
-              final manga = mangaRepository.findById(id);
-              if (manga != null && manga.itemType == ItemType.novel) {
-                await mangaRepository.removeFromLibrary(manga);
-              }
-            }
+          case 'remove':
+            final removeLibrary = kind == 'removeFromLibrary' ||
+                args['removeFromLibrary'] == true;
+            final removeDownloads = args['deleteDownloads'] == true;
+            if (!removeLibrary && !removeDownloads) return;
+            final selected = <Manga>[
+              for (final id in ids)
+                if (mangaRepository.findById(id) case final Manga manga)
+                  if (manga.itemType == ItemType.novel) manga,
+            ];
+            await removeLibraryItemsAndDownloads(
+              mangasList: selected,
+              removeFromLibrary: removeLibrary,
+              deleteDownloads: removeDownloads,
+            );
         }
         ref.invalidate(getAllMangaStreamProvider(
           categoryId: null, itemType: ItemType.novel,
