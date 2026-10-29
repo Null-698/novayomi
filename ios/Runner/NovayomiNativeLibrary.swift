@@ -45,6 +45,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let selectedCount = UILabel()
   private var selectedIds = Set<Int>()
   private let collection: UICollectionView
+  private let continueHeading = UILabel()
+  private let continueCollection: UICollectionView
+  private var continueHeadingHeight: NSLayoutConstraint!
+  private var continueCollectionHeight: NSLayoutConstraint!
+  private var continueItems: [[String: Any]] = []
   private var entries: [[String: Any]] = []
   private var displayed: [[String: Any]] = []
   private var visibleIds = Set<Int>()
@@ -67,6 +72,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     flow.minimumInteritemSpacing = 10
     flow.minimumLineSpacing = 16
     collection = UICollectionView(frame: .zero, collectionViewLayout: flow)
+    let continueFlow = UICollectionViewFlowLayout()
+    continueFlow.scrollDirection = .horizontal
+    continueFlow.minimumLineSpacing = 12
+    continueFlow.minimumInteritemSpacing = 12
+    continueCollection = UICollectionView(frame: .zero, collectionViewLayout: continueFlow)
     super.init()
 
     root.backgroundColor = .systemBackground
@@ -136,6 +146,22 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     refresh.addTarget(self, action: #selector(refreshLibrary), for: .valueChanged)
     collection.refreshControl = refresh
     root.addSubview(collection)
+
+    continueHeading.text = "Continue Reading"
+    continueHeading.font = .preferredFont(forTextStyle: .headline)
+    continueHeading.textColor = .label
+    continueHeading.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(continueHeading)
+    continueCollection.backgroundColor = .clear
+    continueCollection.showsHorizontalScrollIndicator = false
+    continueCollection.dataSource = self
+    continueCollection.delegate = self
+    continueCollection.register(NovayomiLibraryCell.self,
+                                forCellWithReuseIdentifier: "novel")
+    continueCollection.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(continueCollection)
+    continueHeadingHeight = continueHeading.heightAnchor.constraint(equalToConstant: 0)
+    continueCollectionHeight = continueCollection.heightAnchor.constraint(equalToConstant: 0)
     if #available(iOS 26.0, *) {
       selectionBar.effect = UIGlassEffect(style: .regular)
       selectionBar.cornerConfiguration = .capsule()
@@ -193,7 +219,15 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       categoryStack.topAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.topAnchor),
       categoryStack.bottomAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.bottomAnchor),
       categoryStack.heightAnchor.constraint(equalTo: categoryScroll.frameLayoutGuide.heightAnchor),
-      collection.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
+      continueHeading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
+      continueHeading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+      continueHeading.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
+      continueHeadingHeight,
+      continueCollection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+      continueCollection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      continueCollection.topAnchor.constraint(equalTo: continueHeading.bottomAnchor, constant: 3),
+      continueCollectionHeight,
+      collection.topAnchor.constraint(equalTo: continueCollection.bottomAnchor, constant: 4),
       collection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       collection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       collectionBottom
@@ -232,6 +266,25 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     if let list = data["categories"] as? [[String: Any]] {
       categoryItems = list
     }
+    let index = Dictionary(uniqueKeysWithValues:
+      entries.compactMap { item -> (Int, [String: Any])? in
+        guard let id = item["id"] as? Int else { return nil }
+        return (id, item)
+      })
+    continueItems = (data["continueItems"] as? [[String: Any]] ?? []).compactMap { item in
+      guard let id = item["id"] as? Int, var book = index[id] else { return nil }
+      book["chapterId"] = item["chapterId"]
+      book["author"] = item["chapterName"]
+      book["progress"] = item["progress"]
+      book["showContinue"] = false
+      return book
+    }
+    let hasShelf = !continueItems.isEmpty
+    continueHeadingHeight.constant = hasShelf ? 30 : 0
+    continueCollectionHeight.constant = hasShelf ? 198 : 0
+    continueHeading.isHidden = !hasShelf
+    continueCollection.isHidden = !hasShelf
+    continueCollection.reloadData()
     if let label = data["title"] as? String { heading.text = label }
     if let index = data["sortIndex"] as? Int { sortIndex = index }
     if let size = data["gridSize"] as? Int { gridSize = size }
@@ -384,15 +437,18 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   func numberOfSections(in collectionView: UICollectionView) -> Int { 1 }
 
   func collectionView(_ collectionView: UICollectionView,
-                      numberOfItemsInSection section: Int) -> Int { displayed.count }
+                      numberOfItemsInSection section: Int) -> Int {
+    collectionView === continueCollection ? continueItems.count : displayed.count
+  }
 
   func collectionView(_ collectionView: UICollectionView,
                       cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "novel", for: indexPath)
       as! NovayomiLibraryCell
-    let item = displayed[indexPath.item]
-    cell.configure(item: item, isList: isList,
-                   selected: selectedIds.contains(item["id"] as? Int ?? -1))
+    let isContinue = collectionView === continueCollection
+    let item = isContinue ? continueItems[indexPath.item] : displayed[indexPath.item]
+    cell.configure(item: item, isList: !isContinue && isList,
+                   selected: !isContinue && selectedIds.contains(item["id"] as? Int ?? -1))
     cell.onResume = { [weak self] in
       guard let id = item["id"] as? Int else { return }
       self?.channel.invokeMethod("resume", arguments: id)
@@ -402,6 +458,12 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func collectionView(_ collectionView: UICollectionView,
                       didSelectItemAt indexPath: IndexPath) {
+    if collectionView === continueCollection {
+      guard continueItems.indices.contains(indexPath.item),
+            let chapterId = continueItems[indexPath.item]["chapterId"] as? Int else { return }
+      channel.invokeMethod("resumeChapter", arguments: chapterId)
+      return
+    }
     guard displayed.indices.contains(indexPath.item),
           let id = displayed[indexPath.item]["id"] as? Int else { return }
     if !selectedIds.isEmpty {
@@ -500,6 +562,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
                       sizeForItemAt indexPath: IndexPath) -> CGSize {
+    if collectionView === continueCollection {
+      return CGSize(width: 110, height: 192)
+    }
     let width = collectionView.bounds.inset(by: collectionView.adjustedContentInset).width
     if isList { return CGSize(width: max(1, width - 28), height: 92) }
     let columns: CGFloat = gridSize > 0
@@ -511,12 +576,15 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
                       insetForSectionAt section: Int) -> UIEdgeInsets {
-    UIEdgeInsets(top: 10, left: 14, bottom: 28, right: 14)
+    collectionView === continueCollection
+      ? UIEdgeInsets(top: 2, left: 18, bottom: 2, right: 18)
+      : UIEdgeInsets(top: 10, left: 14, bottom: 28, right: 14)
   }
 
   func collectionView(_ collectionView: UICollectionView,
                       contextMenuConfigurationForItemAt indexPath: IndexPath,
                       point: CGPoint) -> UIContextMenuConfiguration? {
+    if collectionView === continueCollection { return nil }
     guard displayed.indices.contains(indexPath.item),
           let id = displayed[indexPath.item]["id"] as? Int else { return nil }
     let name = displayed[indexPath.item]["name"] as? String ?? ""
