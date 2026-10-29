@@ -46,6 +46,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let collection: UICollectionView
   private var entries: [[String: Any]] = []
   private var displayed: [[String: Any]] = []
+  private var visibleIds = Set<Int>()
+  private var visibleOrder = [Int: Int]()
   private var categoryItems: [[String: Any]] = []
   private var selectedCategory: Int? = nil
   private var onlyUncategorized = false
@@ -105,6 +107,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
     search.placeholder = "Search novels"
     search.searchBarStyle = .minimal
+    search.scopeButtonTitles = ["Filtered", "All"]
+    search.selectedScopeButtonIndex = 0
+    search.showsScopeBar = true
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(search)
@@ -175,7 +180,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       search.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 2),
       search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
       search.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
-      search.heightAnchor.constraint(equalToConstant: 52),
+      search.heightAnchor.constraint(equalToConstant: 76),
       categoryScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 4),
       categoryScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       categoryScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
@@ -213,6 +218,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private func apply(_ data: [String: Any]) {
     configuration = data
     if let list = data["items"] as? [[String: Any]] { entries = list }
+    if let ids = data["visibleIds"] as? [Int] {
+      visibleIds = Set(ids)
+      visibleOrder = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, $0.offset) })
+    }
     if let list = data["categories"] as? [[String: Any]] {
       categoryItems = list
     }
@@ -283,17 +292,36 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   private func filterAndReload() {
     let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    let ignoreFilters = !text.isEmpty && search.selectedScopeButtonIndex == 1
+    let tokens = text.lowercased().split(separator: ",")
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
     displayed = entries.filter { item in
+      guard let id = item["id"] as? Int else { return false }
+      if !ignoreFilters && !visibleIds.contains(id) { return false }
       let categories = item["categories"] as? [Int] ?? []
       if onlyUncategorized && !categories.isEmpty { return false }
       if let category = selectedCategory, !categories.contains(category) { return false }
-      if !text.isEmpty {
-        let name = item["name"] as? String ?? ""
-        let author = item["author"] as? String ?? ""
-        if !name.localizedCaseInsensitiveContains(text) &&
-           !author.localizedCaseInsensitiveContains(text) { return false }
+      if !tokens.isEmpty {
+        let name = (item["name"] as? String ?? "").lowercased()
+        let author = (item["author"] as? String ?? "").lowercased()
+        let source = (item["source"] as? String ?? "").lowercased()
+        let genres = (item["genre"] as? [String] ?? []).map { $0.lowercased() }
+        if !tokens.contains(where: { token in
+          name.contains(token) || source.contains(token) ||
+          author.contains(token) || genres.contains(where: { $0.contains(token) })
+        }) { return false }
       }
       return true
+    }
+    displayed.sort { lhs, rhs in
+      let a = lhs["id"] as? Int ?? -1
+      let b = rhs["id"] as? Int ?? -1
+      let ar = visibleOrder[a] ?? Int.max
+      let br = visibleOrder[b] ?? Int.max
+      if ar != br { return ar < br }
+      return (lhs["name"] as? String ?? "").localizedCompare(
+        rhs["name"] as? String ?? "") == .orderedAscending
     }
     total.text = "\(displayed.count) novels"
     collection.reloadData()
@@ -306,6 +334,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
     searchBar.resignFirstResponder()
+  }
+
+  func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
+    filterAndReload()
   }
 
   @objc private func openPreferences() {
