@@ -152,6 +152,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     collection.dataSource = self
     collection.delegate = self
     collection.register(NovayomiLibraryCell.self, forCellWithReuseIdentifier: "novel")
+    let longPress = UILongPressGestureRecognizer(target: self, action: #selector(longPressNovel(_:)))
+    longPress.minimumPressDuration = 0.5
+    longPress.cancelsTouchesInView = true
+    collection.addGestureRecognizer(longPress)
     collection.translatesAutoresizingMaskIntoConstraints = false
     refresh.addTarget(self, action: #selector(refreshLibrary), for: .valueChanged)
     collection.refreshControl = refresh
@@ -185,11 +189,26 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     selectedCount.text = "0 selected"
     selectedCount.textAlignment = .center
     let clear = nativeButton("xmark", hint: "Cancel selection", action: #selector(clearSelection))
+    let choose = UIButton(type: .system)
+    choose.setImage(UIImage(systemName: "checklist"), for: .normal)
+    choose.tintColor = .label
+    choose.accessibilityLabel = "Selection actions"
+    choose.showsMenuAsPrimaryAction = true
+    choose.menu = UIMenu(children: [
+      UIAction(title: "Select all visible", image: UIImage(systemName: "checkmark.circle")) {
+        [weak self] _ in self?.selectAllVisible()
+      },
+      UIAction(title: "Invert selection", image: UIImage(systemName: "arrow.left.arrow.right")) {
+        [weak self] _ in self?.invertSelection()
+      }
+    ])
+    choose.widthAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true
+    choose.heightAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
     let mark = nativeButton("checkmark.circle", hint: "Mark novels as read", action: #selector(markSelectedRead))
     let unread = nativeButton("circle", hint: "Mark novels as unread", action: #selector(markSelectedUnread))
     let categories = nativeButton("tag", hint: "Set categories", action: #selector(selectCategories))
     let remove = nativeButton("trash", hint: "Remove from library", action: #selector(confirmRemove))
-    let selections = UIStackView(arrangedSubviews: [clear, selectedCount, mark, unread, categories, remove])
+    let selections = UIStackView(arrangedSubviews: [clear, selectedCount, choose, mark, unread, categories, remove])
     selections.axis = .horizontal
     selections.alignment = .center
     selections.distribution = .fillProportionally
@@ -606,6 +625,27 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     button.widthAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true
     button.heightAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
     return button
+  }
+
+  @objc private func longPressNovel(_ recognizer: UILongPressGestureRecognizer) {
+    guard recognizer.state == .began else { return }
+    let point = recognizer.location(in: collection)
+    guard let index = collection.indexPathForItem(at: point),
+          displayed.indices.contains(index.item),
+          let id = displayed[index.item]["id"] as? Int else { return }
+    toggleSelection(id)
+  }
+
+  private func selectAllVisible() {
+    selectedIds.formUnion(displayed.compactMap { $0["id"] as? Int })
+    updateSelectionBar()
+    collection.reloadData()
+  }
+
+  private func invertSelection() {
+    selectedIds.formSymmetricDifference(Set(displayed.compactMap { $0["id"] as? Int }))
+    updateSelectionBar()
+    collection.reloadData()
   }
 
   private func toggleSelection(_ id: Int) {
