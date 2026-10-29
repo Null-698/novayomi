@@ -115,7 +115,15 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
             : null;
     // The native sheet must see the *entire* reading-order list, not only a
     // sliding window of 25 entries around the current chapter.
-    final chapters = novel?.getChapterListForReading(current: chapter) ?? <Chapter>[];
+    final preferred = novel?.getChapterListForReading(current: chapter) ?? <Chapter>[];
+    final knownIds = preferred.map((c) => c.id).toSet();
+    // The picker must list every actual chapter, even if reading preferences
+    // would skip read or duplicate chapters for Next/Previous navigation.
+    final chapters = <Chapter>[
+      ...preferred,
+      for (final c in novel?.chapters.toList() ?? <Chapter>[])
+        if (!knownIds.contains(c.id)) c,
+    ];
     final index = chapters.indexWhere((c) => c.id == chapter.id);
 
     return <String, Object?>{
