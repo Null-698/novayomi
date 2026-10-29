@@ -1,0 +1,341 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:mangayomi/models/chapter.dart';
+import 'package:mangayomi/models/settings.dart';
+import 'package:mangayomi/modules/novel/novel_reader_controller_provider.dart';
+import 'package:mangayomi/providers/reader_state_provider.dart';
+import 'package:mangayomi/services/get_html_content.dart';
+import 'package:mangayomi/src/rust/api/epub.dart';
+
+/// Data-only Flutter bridge for the full-screen UIKit / WKWebView reader.
+/// Flutter never renders iOS novel text, bars, overlays or scroll effects.
+class NativeNovelReaderScreen extends ConsumerStatefulWidget {
+  const NativeNovelReaderScreen({
+    super.key,
+    required this.chapter,
+    required this.result,
+  });
+
+  final Chapter chapter;
+  final AsyncValue<(String, EpubNovel?)> result;
+
+  @override
+  ConsumerState<NativeNovelReaderScreen> createState() =>
+      _NativeNovelReaderScreenState();
+}
+
+class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScreen> {
+  static const _channel = MethodChannel('novayomi/native-reader');
+
+  late Chapter _chapter;
+  late final Stopwatch _readingTime;
+  double _progress = 0;
+  bool _opening = false;
+  bool _presented = false;
+  bool _busy = false;
+  bool _closing = false;
+  String? _error;
+  DateTime _lastSavedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _chapter = widget.chapter;
+    _progress = double.tryParse(_chapter.lastPageRead ?? '')?.clamp(0.0, 1.0).toDouble() ?? 0;
+    _readingTime = Stopwatch()..start();
+    _channel.setMethodCallHandler(_onNativeCall);
+  }
+
+  @override
+  void didUpdateWidget(covariant NativeNovelReaderScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_presented && !_opening && widget.result.hasValue) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startIfReady();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _readingTime.stop();
+    _channel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  NovelReaderController get _controller =>
+      ref.read(novelReaderControllerProvider(chapter: _chapter).notifier);
+
+  void _startIfReady() {
+    if (!mounted || _opening || _presented || _closing) return;
+    final result = widget.result;
+    if (result is AsyncData<(String, EpubNovel?)>) {
+      unawaited(_open(result.value));
+    }
+  }
+
+  Future<void> _open((String, EpubNovel?) data) async {
+    if (_opening || _presented || !mounted) return;
+    _opening = true;
+    try {
+      await _channel.invokeMethod<void>('open', _buildPayload(_chapter, data));
+      if (mounted) _presented = true;
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Map<String, Object?> _buildPayload(
+    Chapter chapter,
+    (String, EpubNovel?) data,
+  ) {
+    final controller = ref.read(
+      novelReaderControllerProvider(chapter: chapter).notifier,
+    );
+    final novel = chapter.manga.value;
+    final url = Uri.tryParse(chapter.url ?? '');
+    final chapters = novel?.chapters.toList() ?? <Chapter>[];
+    final index = chapters.indexWhere((c) => c.id == chapter.id);
+    final start = index < 0 ? 0 : (index - 12).clamp(0, chapters.length).toInt();
+    final end = index < 0
+        ? chapters.length.clamp(0, 25).toInt()
+        : (index + 13).clamp(0, chapters.length).toInt();
+
+    return <String, Object?>{
+      'title': novel?.name ?? 'Novel',
+      'subtitle': chapter.name ?? '',
+      'html': _prepareHtml(data.$1, data.$2),
+      'chapterId': chapter.id,
+      'progress': double.tryParse(chapter.lastPageRead ?? '')?.clamp(0.0, 1.0).toDouble() ?? 0,
+      'bookmarked': controller.getChapterBookmarked(),
+      'hasPrevious': controller.hasPreviousChapter,
+      'hasNext': controller.hasNextChapter,
+      'mode': controller.getReaderMode().isContinuous ? 'scroll' : 'pages',
+      'fontSize': ref.read(novelFontSizeStateProvider),
+      'lineHeight': ref.read(novelReaderLineHeightStateProvider),
+      'padding': ref.read(novelReaderPaddingStateProvider),
+      'background': ref.read(novelReaderThemeStateProvider),
+      'foreground': ref.read(novelReaderTextColorStateProvider),
+      'compactParagraphs': ref.read(novelRemoveExtraParagraphSpacingStateProvider),
+      'alignment': ref.read(novelTextAlignStateProvider).name == 'block'
+          ? 'justify'
+          : ref.read(novelTextAlignStateProvider).name,
+      'fontFamily': _webkitFont(ref.read(novelFontFamilyStateProvider)),
+      if (url != null && (url.scheme == 'https' || url.scheme == 'http'))
+        'baseURL': url.toString(),
+      'chapters': [
+        for (final entry in chapters.sublist(start, end))
+          if (entry.id != null)
+            <String, Object?>{
+              'id': entry.id,
+              'title': entry.name ?? 'Chapter',
+            },
+      ],
+    };
+  }
+
+  String _webkitFont(String? value) {
+    switch (value) {
+      case 'Georgia':
+      case 'Palatino':
+      case 'Helvetica':
+        return value!;
+      default:
+        return '';
+    }
+  }
+
+  String _prepareHtml(String source, EpubNovel? book) {
+    final document = html_parser.parse(source);
+    // Preserve the behavior of flutter_html: content is markup, never code.
+    for (final element in document.querySelectorAll(
+      'script, iframe, object, embed, form, link, meta, base',
+    )) {
+      element.remove();
+    }
+    for (final element in document.querySelectorAll('*')) {
+      for (final key in element.attributes.keys.toList()) {
+        if (key.toLowerCase().startsWith('on') || key.toLowerCase() == 'srcdoc') {
+          element.attributes.remove(key);
+        }
+      }
+    }
+    // Embed only EPUB images referenced by this chapter.
+    if (book != null) {
+      for (final image in document.querySelectorAll('img')) {
+        final src = image.attributes['src'] ?? '';
+        if (src.isEmpty || src.startsWith('data:')) continue;
+        final name = Uri.tryParse(src)?.pathSegments.last ?? src.split('/').last;
+        EpubResource? found;
+        for (final candidate in book.images) {
+          if (candidate.name.endsWith(name) ||
+              candidate.name.contains(name.replaceAll('%20', ' '))) {
+            found = candidate;
+            break;
+          }
+        }
+        if (found == null) continue;
+        final ext = name.split('.').last.toLowerCase();
+        final mime = switch (ext) {
+          'png' => 'image/png',
+          'gif' => 'image/gif',
+          'webp' => 'image/webp',
+          'svg' => 'image/svg+xml',
+          _ => 'image/jpeg',
+        };
+        image.attributes['src'] =
+            'data:' + mime + ';base64,' + base64Encode(found.content);
+      }
+    }
+    return document.body?.innerHtml ?? source;
+  }
+
+  Future<dynamic> _onNativeCall(MethodCall call) async {
+    if (call.method != 'event' || !mounted || _closing) return null;
+    final payload = Map<String, dynamic>.from(call.arguments as Map);
+    switch (payload['type'] as String? ?? '') {
+      case 'progress':
+        final raw = payload['value'] as num?;
+        if (raw == null) break;
+        _progress = raw.toDouble().clamp(0.0, 1.0).toDouble();
+        final now = DateTime.now();
+        if (now.difference(_lastSavedAt) >= const Duration(seconds: 15)) {
+          _lastSavedAt = now;
+          _controller.setChapterOffset(_progress * 1000, 1000, true);
+        }
+      case 'bookmark':
+        _controller.setChapterBookmarked();
+      case 'fontSize':
+        final size = payload['value'] as int?;
+        if (size != null) {
+          ref.read(novelFontSizeStateProvider.notifier).set(size);
+        }
+      case 'lineHeight':
+        final height = (payload['value'] as num?)?.toDouble();
+        if (height != null) {
+          ref.read(novelReaderLineHeightStateProvider.notifier).set(height);
+        }
+      case 'mode':
+        final mode = payload['value'] as String?;
+        if (mode == 'scroll' || mode == 'pages') {
+          _controller.setReaderMode(
+            mode == 'scroll' ? ReaderMode.verticalContinuous : ReaderMode.ltr,
+          );
+        }
+      case 'previous':
+        unawaited(_navigate(forward: false));
+      case 'next':
+        unawaited(_navigate(forward: true));
+      case 'chapter':
+        final id = payload['id'] as int?;
+        if (id != null) unawaited(_navigate(id: id));
+      case 'closed':
+        unawaited(_closeFromNative());
+    }
+    return null;
+  }
+
+  Future<void> _persistChapter() async {
+    final controller = _controller;
+    controller.setChapterOffset(_progress * 1000, 1000, true);
+    await controller.setHistoryUpdate(elapsedSeconds: _readingTime.elapsed.inSeconds);
+    _readingTime
+      ..reset()
+      ..start();
+  }
+
+  Future<void> _navigate({bool? forward, int? id}) async {
+    if (_busy || !mounted || _closing) return;
+    final controller = _controller;
+    Chapter? target;
+    if (id != null) {
+      if (_chapter.id == id) return;
+      for (final c in _chapter.manga.value?.chapters.toList() ?? <Chapter>[]) {
+        if (c.id == id) {
+          target = c;
+          break;
+        }
+      }
+    } else if (forward == true && controller.hasNextChapter) {
+      target = controller.getNextChapter();
+    } else if (forward == false && controller.hasPreviousChapter) {
+      target = controller.getPrevChapter();
+    }
+    if (target == null) return;
+    _busy = true;
+    try {
+      final data = await ref.read(getHtmlContentProvider(chapter: target).future);
+      if (!mounted || _closing) return;
+      await _persistChapter();
+      if (!mounted || _closing) return;
+      final next = _buildPayload(target, data);
+      await _channel.invokeMethod<void>('replaceChapter', next);
+      _chapter = target;
+      _progress = (next['progress'] as num?)?.toDouble() ?? 0;
+      _lastSavedAt = DateTime.fromMillisecondsSinceEpoch(0);
+    } catch (error) {
+      if (mounted && !_closing) {
+        await _channel.invokeMethod<void>('showError', error.toString());
+      }
+    } finally {
+      _busy = false;
+    }
+  }
+
+  Future<void> _closeFromNative() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      await _persistChapter();
+    } finally {
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.result.when(
+      data: (data) {
+        if (!_presented && !_opening && !_closing && _error == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startIfReady());
+        }
+        return Scaffold(
+          body: Center(
+            child: _error == null
+                ? const CircularProgressIndicator()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Unable to open native reader: $_error'),
+                      TextButton(
+                        onPressed: () {
+                          setState(() => _error = null);
+                          _startIfReady();
+                        },
+                        child: const Text('Retry native reader'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stack) => Scaffold(
+        body: Center(child: Text('Unable to load chapter: $error')),
+      ),
+    );
+  }
+}

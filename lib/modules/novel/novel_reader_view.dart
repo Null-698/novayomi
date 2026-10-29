@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:mangayomi/modules/novel/native_novel_reader_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:mangayomi/modules/reader_common/key_bindings.dart';
@@ -54,6 +55,10 @@ class NovelReaderView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final result = ref.watch(getHtmlContentProvider(chapter: chapter));
 
+    // iOS uses native UIKit/WebKit exclusively, without a Flutter fallback.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return NativeNovelReaderScreen(chapter: chapter, result: result);
+    }
     return NovelWebView(chapter: chapter, result: result);
   }
 }
