@@ -53,10 +53,13 @@ jobs:
         run: |
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/modules/novel/native_novel_reader_screen.dart \
-            lib/modules/novel/novel_reader_view.dart
+            lib/modules/novel/novel_reader_view.dart \
+            lib/modules/library/native_ios_novel_library.dart
 
-      - name: Check native reader Swift syntax
-        run: xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeReader.swift
+      - name: Check native iOS Swift syntax
+        run: |
+          xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeReader.swift
+          xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeLibrary.swift
 
       - name: Build unsigned iOS IPA
         env:
