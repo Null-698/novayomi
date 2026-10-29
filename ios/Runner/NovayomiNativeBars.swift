@@ -35,6 +35,7 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
   private let kind: String
   private var tabs: UITabBar?
   private var navigation: UINavigationBar?
+  private var readerTop: NovayomiReaderTopView?
   private var toolbar: UIToolbar?
   private var readerBottom: NovayomiReaderBottomView?
   private var currentTabs: [UITabBarItem] = []
@@ -59,9 +60,9 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
       tabs = control
       mount(control)
     case "readerTop":
-      let control = UINavigationBar(frame: .zero)
-      control.isTranslucent = true
-      navigation = control
+      let control = NovayomiReaderTopView(frame: .zero)
+      control.onAction = { [weak self] action in self?.emit(action) }
+      readerTop = control
       mount(control)
     case "readerToolbar":
       let control = UIToolbar(frame: .zero)
@@ -137,7 +138,7 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
       let selected = args["selected"] as? Int ?? 0
       bar.selectedItem = items.indices.contains(selected) ? items[selected] : items.first
     case "readerTop":
-      configureReaderNavigation(args)
+      readerTop?.update(args)
     case "readerToolbar":
       configureReaderToolbar(args)
     case "readerBottom":
@@ -321,8 +322,12 @@ private final class NovayomiReaderBottomView: UIView {
     backgroundColor = .clear
 
     glass.translatesAutoresizingMaskIntoConstraints = false
-    glass.layer.cornerRadius = 26
-    glass.clipsToBounds = true
+    if #available(iOS 26.0, *) {
+      glass.cornerConfiguration = .corners(radius: 26)
+    } else {
+      glass.layer.cornerRadius = 26
+      glass.clipsToBounds = true
+    }
     addSubview(glass)
     NSLayoutConstraint.activate([
       glass.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -423,3 +428,141 @@ private final class NovayomiReaderBottomView: UIView {
   }
 }
 
+
+
+/// Each iOS reader control group has its own real system glass surface.
+/// The center title is also backed by glass, so novel text cannot show
+/// through the title or its subtitle as it scrolls under the top controls.
+private final class NovayomiReaderTopView: UIView {
+  var onAction: ((String) -> Void)?
+
+  private let back = UIButton(type: .system)
+  private let bookmark = UIButton(type: .system)
+  private let more = UIButton(type: .system)
+  private let title = UILabel()
+  private let subtitle = UILabel()
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    backgroundColor = .clear
+
+    let leadingGlass = makeGlass()
+    let titleGlass = makeGlass()
+    let trailingGlass = makeGlass()
+    [leadingGlass, titleGlass, trailingGlass].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
+
+    back.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
+    back.accessibilityLabel = "Back"
+    back.addTarget(self, action: #selector(goBack), for: .touchUpInside)
+
+    bookmark.setImage(UIImage(systemName: "bookmark"), for: .normal)
+    bookmark.accessibilityLabel = "Bookmark"
+    bookmark.addTarget(self, action: #selector(toggleBookmark), for: .touchUpInside)
+
+    more.setImage(UIImage(systemName: "ellipsis"), for: .normal)
+    more.accessibilityLabel = "More options"
+    more.showsMenuAsPrimaryAction = true
+
+    [back, bookmark, more].forEach {
+      $0.tintColor = .label
+      $0.translatesAutoresizingMaskIntoConstraints = false
+    }
+    leadingGlass.contentView.addSubview(back)
+
+    let actions = UIStackView(arrangedSubviews: [more, bookmark])
+    actions.axis = .horizontal
+    actions.distribution = .fillEqually
+    actions.translatesAutoresizingMaskIntoConstraints = false
+    trailingGlass.contentView.addSubview(actions)
+
+    title.font = .preferredFont(forTextStyle: .subheadline)
+    title.textColor = .label
+    title.textAlignment = .center
+    title.lineBreakMode = .byTruncatingTail
+    subtitle.font = .preferredFont(forTextStyle: .caption2)
+    subtitle.textColor = .secondaryLabel
+    subtitle.textAlignment = .center
+    subtitle.lineBreakMode = .byTruncatingTail
+
+    let labels = UIStackView(arrangedSubviews: [title, subtitle])
+    labels.axis = .vertical
+    labels.alignment = .fill
+    labels.spacing = 0
+    labels.translatesAutoresizingMaskIntoConstraints = false
+    titleGlass.contentView.addSubview(labels)
+
+    NSLayoutConstraint.activate([
+      leadingGlass.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      leadingGlass.centerYAnchor.constraint(equalTo: centerYAnchor),
+      leadingGlass.widthAnchor.constraint(equalToConstant: 50),
+      leadingGlass.heightAnchor.constraint(equalToConstant: 48),
+
+      trailingGlass.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+      trailingGlass.centerYAnchor.constraint(equalTo: centerYAnchor),
+      trailingGlass.widthAnchor.constraint(equalToConstant: 100),
+      trailingGlass.heightAnchor.constraint(equalToConstant: 48),
+
+      titleGlass.leadingAnchor.constraint(equalTo: leadingGlass.trailingAnchor, constant: 8),
+      titleGlass.trailingAnchor.constraint(equalTo: trailingGlass.leadingAnchor, constant: -8),
+      titleGlass.centerYAnchor.constraint(equalTo: centerYAnchor),
+      titleGlass.heightAnchor.constraint(equalToConstant: 48),
+
+      back.leadingAnchor.constraint(equalTo: leadingGlass.contentView.leadingAnchor),
+      back.trailingAnchor.constraint(equalTo: leadingGlass.contentView.trailingAnchor),
+      back.topAnchor.constraint(equalTo: leadingGlass.contentView.topAnchor),
+      back.bottomAnchor.constraint(equalTo: leadingGlass.contentView.bottomAnchor),
+
+      actions.leadingAnchor.constraint(equalTo: trailingGlass.contentView.leadingAnchor),
+      actions.trailingAnchor.constraint(equalTo: trailingGlass.contentView.trailingAnchor),
+      actions.topAnchor.constraint(equalTo: trailingGlass.contentView.topAnchor),
+      actions.bottomAnchor.constraint(equalTo: trailingGlass.contentView.bottomAnchor),
+
+      labels.leadingAnchor.constraint(equalTo: titleGlass.contentView.leadingAnchor, constant: 8),
+      labels.trailingAnchor.constraint(equalTo: titleGlass.contentView.trailingAnchor, constant: -8),
+      labels.centerYAnchor.constraint(equalTo: titleGlass.contentView.centerYAnchor)
+    ])
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+  private func makeGlass() -> UIVisualEffectView {
+    let view: UIVisualEffectView
+    if #available(iOS 26.0, *) {
+      view = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      view.cornerConfiguration = .capsule()
+    } else {
+      view = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+      view.layer.cornerRadius = 24
+      view.clipsToBounds = true
+    }
+    return view
+  }
+
+  func update(_ args: [String: Any]) {
+    title.text = args["title"] as? String ?? ""
+    subtitle.text = args["subtitle"] as? String ?? ""
+    let saved = args["bookmarked"] as? Bool ?? false
+    bookmark.setImage(UIImage(systemName: saved ? "bookmark.fill" : "bookmark"), for: .normal)
+    bookmark.accessibilityLabel = saved ? "Remove bookmark" : "Bookmark"
+
+    var menuActions: [UIAction] = []
+    if args["canRefresh"] as? Bool ?? false {
+      menuActions.append(UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+        self?.onAction?("refresh")
+      })
+    }
+    if args["canOpenWeb"] as? Bool ?? false {
+      menuActions.append(UIAction(title: "Open in Web View", image: UIImage(systemName: "globe")) { [weak self] _ in
+        self?.onAction?("web")
+      })
+    }
+    more.isEnabled = !menuActions.isEmpty
+    more.menu = UIMenu(children: menuActions)
+  }
+
+  @objc private func goBack() { onAction?("back") }
+  @objc private func toggleBookmark() { onAction?("bookmark") }
+}

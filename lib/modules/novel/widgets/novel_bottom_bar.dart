@@ -192,11 +192,7 @@ class NovelBottomBar extends ConsumerWidget {
             offset: isVisible ? Offset.zero : const Offset(0, 1),
             duration: duration,
             curve: curve,
-            child: AnimatedOpacity(
-              opacity: isVisible ? 1 : 0,
-              duration: duration,
-              curve: curve,
-              child: Padding(
+            child: Padding(
                 padding: EdgeInsets.fromLTRB(
                   ShioriSpace.s8,
                   0,
@@ -330,7 +326,6 @@ class NovelBottomBar extends ConsumerWidget {
                     },
                   ),
                 ),
-              ),
             ),
           ),
         ),

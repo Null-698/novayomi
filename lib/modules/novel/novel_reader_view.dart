@@ -236,7 +236,13 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
         startAutoScroll();
       }
     });
-    if (!isDesktop) SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // Keep the native status bar and Dynamic Island visible while
+      // allowing novel text to extend under them.
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else if (!isDesktop) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    }
 
     initTtsSubscriptions();
   }
@@ -852,7 +858,9 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
         _isView = !_isView;
       });
     }
-    if (fullScreenReader) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else if (fullScreenReader) {
       if (_isView) {
         restoreSystemUI();
       } else {

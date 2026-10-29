@@ -97,11 +97,7 @@ class ReaderAppBar extends ConsumerWidget {
             offset: isVisible ? Offset.zero : const Offset(0, -1),
             duration: duration,
             curve: curve,
-            child: AnimatedOpacity(
-              opacity: isVisible ? 1 : 0,
-              duration: duration,
-              curve: curve,
-              child: Padding(
+            child: Padding(
                 padding: EdgeInsets.only(top: topInset),
                 child: SizedBox(
                   height: kToolbarHeight,
@@ -128,7 +124,6 @@ class ReaderAppBar extends ConsumerWidget {
                     },
                   ),
                 ),
-              ),
             ),
           ),
         ),
