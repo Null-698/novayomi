@@ -348,6 +348,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let item = displayed[indexPath.item]
     cell.configure(item: item, isList: isList,
                    selected: selectedIds.contains(item["id"] as? Int ?? -1))
+    cell.onResume = { [weak self] in
+      guard let id = item["id"] as? Int else { return }
+      self?.channel.invokeMethod("resume", arguments: id)
+    }
     return cell
   }
 
@@ -490,6 +494,9 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private let cover = UIImageView()
   private let title = UILabel()
   private let author = UILabel()
+  private let badge = UILabel()
+  private let resume = UIButton(type: .system)
+  var onResume: (() -> Void)?
   private let stack = UIStackView()
   private let textStack = UIStackView()
   private var coverHeight: NSLayoutConstraint!
@@ -504,6 +511,32 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.clipsToBounds = true
     cover.layer.cornerRadius = 8
     cover.backgroundColor = .secondarySystemGroupedBackground
+    badge.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    badge.textColor = .label
+    badge.backgroundColor = .secondarySystemBackground
+    badge.layer.cornerRadius = 7
+    badge.clipsToBounds = true
+    badge.textAlignment = .center
+    badge.translatesAutoresizingMaskIntoConstraints = false
+    cover.addSubview(badge)
+    resume.setImage(UIImage(systemName: "play.fill"), for: .normal)
+    resume.tintColor = .white
+    resume.backgroundColor = .systemBlue
+    resume.layer.cornerRadius = 17
+    resume.accessibilityLabel = "Continue reading"
+    resume.translatesAutoresizingMaskIntoConstraints = false
+    resume.addTarget(self, action: #selector(resumeTapped), for: .touchUpInside)
+    cover.addSubview(resume)
+    NSLayoutConstraint.activate([
+      badge.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 5),
+      badge.topAnchor.constraint(equalTo: cover.topAnchor, constant: 5),
+      badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
+      badge.heightAnchor.constraint(equalToConstant: 24),
+      resume.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -5),
+      resume.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -5),
+      resume.widthAnchor.constraint(equalToConstant: 34),
+      resume.heightAnchor.constraint(equalToConstant: 34)
+    ])
     title.font = .preferredFont(forTextStyle: .caption1)
     title.numberOfLines = 2
     title.textColor = .label
@@ -540,6 +573,9 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     loadTask?.cancel()
     loadTask = nil
     represented = ""
+    onResume = nil
+    badge.isHidden = true
+    resume.isHidden = true
     cover.image = UIImage(systemName: "book.closed")
   }
 
@@ -551,6 +587,11 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     contentView.layer.cornerRadius = 9
     title.text = item["name"] as? String ?? "Untitled"
     author.text = item["author"] as? String ?? ""
+    let unread = item["unreadCount"] as? Int ?? 0
+    let downloaded = item["downloadedCount"] as? Int ?? 0
+    badge.text = unread > 0 ? "  \(unread)  " : "  \(downloaded)  "
+    badge.isHidden = unread == 0 && downloaded == 0
+    resume.isHidden = !(item["showContinue"] as? Bool ?? false)
     cover.image = UIImage(systemName: "book.closed")
 
     if isList {
@@ -592,6 +633,8 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     }
     loadTask?.resume()
   }
+
+  @objc private func resumeTapped() { onResume?() }
 
   override func layoutSubviews() {
     super.layoutSubviews()
