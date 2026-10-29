@@ -172,7 +172,8 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     }
     for (final element in document.querySelectorAll('*')) {
       for (final key in element.attributes.keys.toList()) {
-        if (key.toLowerCase().startsWith('on') || key.toLowerCase() == 'srcdoc') {
+        final attributeName = key.toString().toLowerCase();
+        if (attributeName.startsWith('on') || attributeName == 'srcdoc') {
           element.attributes.remove(key);
         }
       }
@@ -200,8 +201,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
           'svg' => 'image/svg+xml',
           _ => 'image/jpeg',
         };
-        image.attributes['src'] =
-            'data:' + mime + ';base64,' + base64Encode(found.content);
+        image.attributes['src'] = 'data:$mime;base64,${base64Encode(found.content)}';
       }
     }
     return document.body?.innerHtml ?? source;
