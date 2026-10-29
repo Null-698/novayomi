@@ -266,6 +266,8 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
             'id': book.id,
             'name': book.name ?? 'Untitled',
             'author': book.author ?? '',
+            'source': book.source ?? '',
+            'genre': book.genre ?? const <String>[],
             'cover': toImgUrl(book.customCoverFromTracker ?? book.imageUrl ?? ''),
             'categories': book.categories ?? const <int>[],
             'chapterCount': book.chapters.length,
@@ -379,12 +381,18 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     ));
     _payload = <String, Object?>{
       'title': 'Novels',
-      'items': _serialize(sort.reverse == true
-          ? visible.reversed.toList() : visible,
+      // Keep the full source list separate from visible IDs, so the native
+      // search bar can temporarily ignore current filters just as Flutter did.
+      'items': _serialize(books,
           settings: settings,
           downloadedIds: downloadedIds,
           showDownloaded: downloadBadges,
           showContinue: continueButtons),
+      'visibleIds': [
+        for (final book in (sort.reverse == true
+            ? visible.reversed.toList() : visible))
+          if (book.id != null) book.id!,
+      ],
       'categories': <Map<String, Object?>>[
         for (final c in (categories ?? []).where((c) => c.hide != true))
           if (c.id != null) <String, Object?>{
