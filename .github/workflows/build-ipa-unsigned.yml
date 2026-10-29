@@ -49,13 +49,49 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build unsigned iOS IPA
+      - name: Check native reader Dart types
         run: |
-          flutter build ios --release --no-codesign
+          flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
+            lib/modules/novel/native_novel_reader_screen.dart \
+            lib/modules/novel/novel_reader_view.dart
+
+      - name: Check native reader Swift syntax
+        run: xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeReader.swift
+
+      - name: Build unsigned iOS IPA
+        env:
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+          CODE_SIGN_IDENTITY: ""
+        run: |
+          # Flutter can misleadingly print provisioning instructions for any
+          # unclassified Xcode build failure; save verbose diagnostics instead.
+          set +e
+          flutter build ios --release --no-codesign --verbose 2>&1 \
+            | tee "$RUNNER_TEMP/novayomi-ios-build.log" \
+            | grep --line-buffered -Ei 'error:|error \(|warning:|Swift Compiler Error|failed to|BUILD FAILED|Xcode build|Running pod install|Building for device|✓ Built|fatal error|Provisioning|signing'
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Last 180 lines of verbose Xcode/Flutter build"
+            tail -n 180 "$RUNNER_TEMP/novayomi-ios-build.log"
+            echo "::endgroup::"
+            echo "::error::Unsigned iOS build failed. Download the build-diagnostics artifact to inspect the full Xcode output."
+            exit "$status"
+          fi
           cd build/ios/iphoneos
           mkdir -p Payload
           cp -R Runner.app Payload/
           zip -qr Novayomi-${{ inputs.release_tag || github.ref_name }}-ios.ipa Payload
+
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: novayomi-ios-build-diagnostics
+          path: ${{ runner.temp }}/novayomi-ios-build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload artifact iOS IPA
         uses: actions/upload-artifact@v4
