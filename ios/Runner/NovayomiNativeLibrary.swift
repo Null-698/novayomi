@@ -59,6 +59,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var selectedCategory: Int? = nil
   private var onlyUncategorized = false
   private var query = ""
+  private var didRestoreViewState = false
   private var isList = false
   private var sortIndex = 0
   private var gridSize = 0
@@ -268,6 +269,27 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   func view() -> UIView { root }
 
   private func apply(_ data: [String: Any]) {
+    if !didRestoreViewState {
+      didRestoreViewState = true
+      let saved = data["uiState"] as? [String: Any] ?? [:]
+      query = saved["search"] as? String ?? ""
+      search.text = query
+      let scope = saved["scope"] as? Int ?? 0
+      search.selectedScopeButtonIndex = min(1, max(0, scope))
+      let category = saved["category"] as? Int ?? 0
+      selectedCategory = category == 0 ? nil : category
+      onlyUncategorized = saved["uncategorized"] as? Bool ?? false
+      let offset = saved["offset"] as? Double ?? 0
+      if offset > 0 {
+        DispatchQueue.main.async { [weak self] in
+          guard let self else { return }
+          self.collection.layoutIfNeeded()
+          let maxY = max(0, self.collection.contentSize.height - self.collection.bounds.height)
+          self.collection.setContentOffset(CGPoint(x: 0, y: min(maxY, CGFloat(offset))),
+                                           animated: false)
+        }
+      }
+    }
     configuration = data
     if let all = data["allCategories"] as? [[String: Any]] {
       categoryManager?.update(all)
@@ -387,7 +409,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     }
     if categoryScroll.isHidden { return }
     var categories: [(String, Int?)] = [("All", nil)]
-    if entries.contains(where: { ($0["categories"] as? [Int] ?? []).isEmpty }) {
+    let relevant = entries.filter { item in
+      guard let id = item["id"] as? Int else { return false }
+      return visibleIds.contains(id)
+    }
+    if relevant.contains(where: { ($0["categories"] as? [Int] ?? []).isEmpty }) {
       categories.append(("Uncategorized", -1))
     }
     categories.append(contentsOf: categoryItems.compactMap { item in
@@ -403,7 +429,19 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         ? onlyUncategorized
         : (option.1 == nil ? selectedCategory == nil && !onlyUncategorized
                             : selectedCategory == option.1 && !onlyUncategorized)
-      configuration.title = option.0
+      let appearance = self.configuration["displaySettings"] as? [String: Bool] ?? [:]
+      if appearance["showCounts"] ?? true {
+        let count = relevant.filter { item in
+          let belonging = item["categories"] as? [Int] ?? []
+          if let category = option.1 {
+            return category == -1 ? belonging.isEmpty : belonging.contains(category)
+          }
+          return true
+        }.count
+        configuration.title = "\(option.0)  \(count)"
+      } else {
+        configuration.title = option.0
+      }
       configuration.baseForegroundColor = selected ? .white : .label
       configuration.baseBackgroundColor = selected ? .systemBlue : .secondarySystemBackground
       button.configuration = configuration
@@ -415,6 +453,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         self.selectedCategory = option.1 == -1 ? nil : option.1
         self.rebuildCategories()
         self.filterAndReload()
+        self.saveViewState()
       }, for: .touchUpInside)
       categoryStack.addArrangedSubview(button)
     }
@@ -460,6 +499,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
     query = searchText
     filterAndReload()
+    saveViewState()
   }
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
@@ -468,6 +508,25 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
     filterAndReload()
+    saveViewState()
+  }
+
+  private func saveViewState() {
+    channel.invokeMethod("uiState", arguments: [
+      "search": query,
+      "scope": search.selectedScopeButtonIndex,
+      "category": selectedCategory ?? 0,
+      "uncategorized": onlyUncategorized,
+      "offset": Double(collection.contentOffset.y)
+    ] as [String: Any])
+  }
+
+  func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    if scrollView === collection && !decelerate { saveViewState() }
+  }
+
+  func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    if scrollView === collection { saveViewState() }
   }
 
   @objc private func openPreferences() {
