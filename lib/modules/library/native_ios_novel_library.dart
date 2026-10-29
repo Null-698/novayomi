@@ -106,6 +106,12 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
         ).notifier).setLibraryDisplayType(
           list ? DisplayType.list : DisplayType.compactGrid,
         );
+      case 'gridSize':
+        final value = call.arguments;
+        if (value is! int || value < 0 || value > 7) return;
+        ref.read(libraryGridSizeStateProvider(
+          itemType: ItemType.novel,
+        ).notifier).set(value, end: true);
       case 'display':
         final index = call.arguments;
         final settings = _settings;
@@ -317,6 +323,9 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     final display = ref.watch(libraryDisplayTypeStateProvider(
       itemType: ItemType.novel, settings: settings,
     ));
+    final gridSize = ref.watch(libraryGridSizeStateProvider(
+      itemType: ItemType.novel,
+    )) ?? 0;
     final download = ref.watch(mangaFilterDownloadedStateProvider(
       itemType: ItemType.novel, mangaList: books, settings: settings,
     ));
@@ -390,7 +399,12 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           showContinue: continueButtons),
       'visibleIds': [
         for (final book in (sort.reverse == true
-            ? visible.reversed.toList() : visible))
+            ? (sort.index == 3
+                ? sortByUnreadCount(visible,
+                    unreadCountOf: (book) => book.unreadChaptersCount(settings),
+                    descending: true)
+                : visible.reversed.toList())
+            : visible))
           if (book.id != null) book.id!,
       ],
       'categories': <Map<String, Object?>>[
@@ -402,6 +416,7 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
       'sortIndex': sort.index ?? 0,
       'sortReverse': sort.reverse ?? false,
       'displayIndex': display.index,
+      'gridSize': gridSize,
       'isList': display == DisplayType.list,
       'filters': <String, int>{
         'downloaded': download,
