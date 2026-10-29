@@ -99,6 +99,12 @@ import UniformTypeIdentifiers
           self.nativeNovelReader?.showLoadingError(args)
         }
         result(nil)
+      case "volumeKey":
+        if let args = call.arguments as? [String: Any],
+           let forward = args["forward"] as? Bool {
+          self.nativeNovelReader?.handleVolumePage(forward: forward)
+        }
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
