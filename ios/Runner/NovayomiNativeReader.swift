@@ -58,6 +58,12 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     webView.scrollView.alwaysBounceVertical = true
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     webView.scrollView.keyboardDismissMode = .interactive
+    if #available(iOS 26.0, *) {
+      // The subtle, progressive edge effect is provided by UIKit itself.
+      // It is NOT a full-width blur overlay or a manually masked gradient.
+      webView.scrollView.topEdgeEffect.style = .soft
+      webView.scrollView.bottomEdgeEffect.style = .soft
+    }
     webView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(webView)
 
@@ -558,6 +564,10 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     chromeVisible = visible
     navigationController?.setNavigationBarHidden(!visible, animated: true)
     navigationController?.setToolbarHidden(!visible, animated: true)
+    if #available(iOS 26.0, *) {
+      webView.scrollView.topEdgeEffect.isHidden = !visible
+      webView.scrollView.bottomEdgeEffect.isHidden = !visible
+    }
     navigationController?.setNeedsStatusBarAppearanceUpdate()
     setNeedsStatusBarAppearanceUpdate()
     // No scroll inset changes or progress restoration while chrome animates.
