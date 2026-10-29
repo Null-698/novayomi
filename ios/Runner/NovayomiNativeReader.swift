@@ -1567,7 +1567,7 @@ private final class NovayomiReaderControls: UIView {
   private let currentLabel = UILabel()
   private let endLabel = UILabel()
   private let previous = UIButton(type: .system)
-  private let next = UIButton(type: .system)
+  private let nextChapterButton = UIButton(type: .system)
   private let chapterButton = UIButton(type: .system)
   private let fontButton = UIButton(type: .system)
   private let layoutButton = UIButton(type: .system)
@@ -1597,9 +1597,9 @@ private final class NovayomiReaderControls: UIView {
     ])
 
     configureButton(previous, symbol: "backward.end.fill", label: "Previous chapter", selector: #selector(previousTapped))
-    configureButton(next, symbol: "forward.end.fill", label: "Next chapter", selector: #selector(nextTapped))
+    configureButton(nextChapterButton, symbol: "forward.end.fill", label: "Next chapter", selector: #selector(nextTapped))
     previous.widthAnchor.constraint(equalToConstant: 40).isActive = true
-    next.widthAnchor.constraint(equalToConstant: 40).isActive = true
+    nextChapterButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
 
     for label in [currentLabel, endLabel] {
       label.textColor = .label
@@ -1611,7 +1611,7 @@ private final class NovayomiReaderControls: UIView {
     slider.setContentHuggingPriority(.defaultLow, for: .horizontal)
     slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     let progressRow = UIStackView(arrangedSubviews: [
-      previous, currentLabel, slider, endLabel, next
+      previous, currentLabel, slider, endLabel, nextChapterButton
     ])
     progressRow.axis = .horizontal
     progressRow.alignment = .center
@@ -1676,7 +1676,7 @@ private final class NovayomiReaderControls: UIView {
 
   func configure(hasPrevious: Bool, hasNext: Bool, mode: String, pageLayout: String, speaking: Bool) {
     previous.isEnabled = hasPrevious
-    next.isEnabled = hasNext
+    nextChapterButton.isEnabled = hasNext
     let symbol = mode == "scroll" ? "arrow.up.arrow.down" :
       pageLayout == "double" ? "book.closed" : "doc.text"
     layoutButton.setImage(UIImage(systemName: symbol), for: .normal)
