@@ -13,7 +13,10 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private let webView: WKWebView
   private let speech = AVSpeechSynthesizer()
   private let progressControl = UISlider(frame: CGRect(x: 0, y: 0, width: 130, height: 35))
+  private let progressStack = UIStackView()
+  private let progressCaption = UILabel()
   private let progressItem: UIBarButtonItem
+  private var lastDisplayedPercent = -1
   private var chapter: [String: Any]
   private var currentProgress = 0.0
   private var applyingProgress = false
@@ -56,7 +59,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     config.defaultWebpagePreferences.allowsContentJavaScript = false
     config.allowsInlineMediaPlayback = false
     webView = WKWebView(frame: .zero, configuration: config)
-    progressItem = UIBarButtonItem(customView: progressControl)
+    progressItem = UIBarButtonItem(customView: progressStack)
     super.init(nibName: nil, bundle: nil)
     speech.delegate = self
   }
@@ -93,7 +96,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     edgesForExtendedLayout = [.top, .bottom]
     extendedLayoutIncludesOpaqueBars = true
 
-    let tap = UITapGestureRecognizer(target: self, action: #selector(toggleChrome))
+    let tap = UITapGestureRecognizer(target: self, action: #selector(toggleChrome(_:)))
     tap.delegate = self
     tap.cancelsTouchesInView = false
     // The gesture belongs to the controller, not the inner WebKit scroll view,
@@ -108,10 +111,22 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     backSwipe.delegate = self
     view.addGestureRecognizer(backSwipe)
 
+    progressStack.axis = .vertical
+    progressStack.alignment = .fill
+    progressStack.spacing = 0
+    progressStack.frame = CGRect(x: 0, y: 0, width: 86, height: 44)
+    progressStack.addArrangedSubview(progressControl)
+    progressCaption.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+    progressCaption.textAlignment = .center
+    progressCaption.textColor = .secondaryLabel
+    progressStack.addArrangedSubview(progressCaption)
+    progressControl.widthAnchor.constraint(equalToConstant: 86).isActive = true
+
     progressControl.minimumValue = 0
     progressControl.maximumValue = 1
     progressControl.value = Float(currentProgress)
     progressControl.accessibilityLabel = "Reading progress"
+    updatePercentLabel()
     progressControl.addTarget(self, action: #selector(progressChanged(_:)), for: .valueChanged)
     progressControl.addTarget(self, action: #selector(progressEnded(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
 
@@ -304,6 +319,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     applyingProgress = false
     currentProgress = value
     progressControl.value = Float(value)
+    updatePercentLabel()
   }
 
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -326,7 +342,16 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     guard didInitialLoad && !applyingProgress else { return }
     currentProgress = progressFraction()
     if !progressControl.isTracking { progressControl.value = Float(currentProgress) }
+    updatePercentLabel()
     reportProgress(force: false)
+  }
+
+  private func updatePercentLabel() {
+    progressCaption.isHidden = !(chapter["showPercent"] as? Bool ?? true)
+    let percentage = Int((currentProgress * 100).rounded())
+    guard percentage != lastDisplayedPercent else { return }
+    lastDisplayedPercent = percentage
+    progressCaption.text = "\(percentage)%"
   }
 
   private func reportProgress(force: Bool) {
@@ -416,7 +441,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     next.isEnabled = chapter["hasNext"] as? Bool ?? false
     next.accessibilityLabel = "Next chapter"
     progressControl.isEnabled = true
-    progressControl.frame.size.width = 86
+    progressStack.frame.size.width = 86
     let overflow = UIBarButtonItem(
       image: UIImage(systemName: "ellipsis.circle"),
       menu: makeMenu()
@@ -724,7 +749,50 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     // No scroll inset changes or progress restoration while chrome animates.
   }
 
-  @objc private func toggleChrome() {
+  private func configureAutoScroll() {
+    autoScrollLink?.invalidate()
+    autoScrollLink = nil
+    guard autoScrollEnabled, readingMode == "scroll", didInitialLoad else { return }
+    let link = CADisplayLink(target: self, selector: #selector(autoScrollFrame(_:)))
+    link.add(to: .main, forMode: .common)
+    autoScrollLink = link
+  }
+
+  @objc private func autoScrollFrame(_ link: CADisplayLink) {
+    let scroll = webView.scrollView
+    guard !scroll.isDragging, !scroll.isDecelerating, didInitialLoad else { return }
+    let limit = max(-contentInsets.top,
+      scroll.contentSize.height - scroll.bounds.height + contentInsets.bottom)
+    guard scroll.contentOffset.y < limit else {
+      autoScrollEnabled = false
+      configureAutoScroll()
+      return
+    }
+    let delta = CGFloat(min(link.targetTimestamp - link.timestamp, 1.0 / 30.0) * autoScrollSpeed * 5)
+    scroll.contentOffset.y = min(scroll.contentOffset.y + delta, limit)
+  }
+
+  @objc private func toggleChrome(_ gesture: UITapGestureRecognizer) {
+    if tapZonesEnabled && !chromeVisible {
+      let point = gesture.location(in: view)
+      let width = view.bounds.width
+      if point.x < width * 0.25 || point.x > width * 0.75 {
+        let scroll = webView.scrollView
+        if readingMode == "pages" {
+          let direction: CGFloat = point.x < width * 0.25 ? -1 : 1
+          scroll.setContentOffset(
+            CGPoint(x: scroll.contentOffset.x + direction * scroll.bounds.width,
+                    y: scroll.contentOffset.y), animated: true)
+        } else {
+          let direction: CGFloat = point.x < width * 0.25 ? -1 : 1
+          scroll.setContentOffset(
+            CGPoint(x: scroll.contentOffset.x,
+                    y: scroll.contentOffset.y + direction * scroll.bounds.height * 0.83),
+            animated: true)
+        }
+        return
+      }
+    }
     setChromeVisible(!chromeVisible)
   }
 
@@ -752,6 +820,10 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     didReportClose = true
     reportProgress(force: true)
     speech.stopSpeaking(at: .immediate)
+    autoScrollLink?.invalidate()
+    autoScrollLink = nil
+    UIApplication.shared.isIdleTimerDisabled = previousIdleTimerDisabled
+    if let brightness = previousBrightness { UIScreen.main.brightness = brightness }
     dismiss(animated: true) { [weak self] in
       self?.onEvent?(["type":"closed"])
       self?.onDismiss?()
@@ -766,7 +838,14 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     lineHeight = data["lineHeight"] as? Double ?? lineHeight
     isBookmarked = data["bookmarked"] as? Bool ?? false
     readingMode = data["mode"] as? String ?? readingMode
+    ttsSpeed = data["ttsSpeed"] as? Double ?? ttsSpeed
+    ttsPitch = data["ttsPitch"] as? Double ?? ttsPitch
+    ttsLanguage = data["ttsLanguage"] as? String
+    tapZonesEnabled = data["tapZones"] as? Bool ?? tapZonesEnabled
+    autoScrollEnabled = data["autoScroll"] as? Bool ?? autoScrollEnabled
+    autoScrollSpeed = data["autoScrollSpeed"] as? Double ?? autoScrollSpeed
     progressControl.value = Float(currentProgress)
+    updatePercentLabel()
     updateBars()
     renderChapter()
   }
