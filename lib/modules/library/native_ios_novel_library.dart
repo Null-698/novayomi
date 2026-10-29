@@ -17,6 +17,10 @@ import 'package:mangayomi/modules/more/categories/providers/isar_providers.dart'
 import 'package:mangayomi/modules/more/providers/downloaded_only_state_provider.dart';
 import 'package:mangayomi/utils/constant.dart';
 import 'package:mangayomi/repositories/manga_repository.dart';
+import 'package:mangayomi/repositories/history_repository.dart';
+import 'package:mangayomi/modules/more/providers/incognito_mode_state_provider.dart';
+import 'package:mangayomi/utils/extensions/chapter_extensions.dart';
+import 'package:mangayomi/utils/extensions/manga_extensions.dart';
 import 'package:mangayomi/utils/headers.dart';
 
 /// Phase 2.1: UIKit Library surface backed exclusively by existing providers.
@@ -68,6 +72,22 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           context: context,
           entry: selected,
         );
+      case 'resume':
+        final id = call.arguments;
+        if (id is! int) return;
+        final manga = mangaRepository.findById(id);
+        if (manga == null || manga.itemType != ItemType.novel) return;
+        final history = ref.read(incognitoModeStateProvider)
+            ? null : historyRepository.findByMangaId(id);
+        if (history != null && !history.chapter.isLoaded) {
+          await history.chapter.load();
+        }
+        final chapters = manga.chapters.toList();
+        final target = history?.chapter.value ??
+            (chapters.isEmpty ? null : chapters.first);
+        if (target != null && mounted) {
+          await target.pushToReaderView(context);
+        }
       case 'sort':
         final index = call.arguments;
         final settings = _settings;
@@ -231,7 +251,13 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     }
   }
 
-  List<Map<String, Object?>> _serialize(List<Manga> books) {
+  List<Map<String, Object?>> _serialize(
+    List<Manga> books, {
+    required Settings settings,
+    required Set<int> downloadedIds,
+    required bool showDownloaded,
+    required bool showContinue,
+  }) {
     final cache = <String, Map<String, String>>{};
     return [
       for (final book in books)
@@ -242,6 +268,14 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
             'author': book.author ?? '',
             'cover': toImgUrl(book.customCoverFromTracker ?? book.imageUrl ?? ''),
             'categories': book.categories ?? const <int>[],
+            'chapterCount': book.chapters.length,
+            'unreadCount': book.unreadChaptersCount(settings),
+            'downloadedCount': showDownloaded
+                ? book.chapters.where((chapter) =>
+                    chapter.id != null && downloadedIds.contains(chapter.id)).length
+                : 0,
+            'showContinue': showContinue && book.chapters.isNotEmpty,
+            'isLocal': book.isLocalArchive ?? false,
             if (book.customCoverImage != null)
               'coverBytes': Uint8List.fromList(book.customCoverImage!),
             'headers': (book.isLocalArchive ?? false) ||
@@ -303,6 +337,8 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
       mangaList: books, itemType: ItemType.novel, settings: settings,
     )).$2;
     final downloadedOnly = ref.watch(downloadedOnlyStateProvider);
+    final downloadedIds = ref.watch(downloadedChapterIdsProvider).asData?.value
+        ?? const <int>{};
     final showCategories = ref.watch(libraryShowCategoryTabsStateProvider(
       itemType: ItemType.novel, settings: settings,
     ));
@@ -344,7 +380,11 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
     _payload = <String, Object?>{
       'title': 'Novels',
       'items': _serialize(sort.reverse == true
-          ? visible.reversed.toList() : visible),
+          ? visible.reversed.toList() : visible,
+          settings: settings,
+          downloadedIds: downloadedIds,
+          showDownloaded: downloadBadges,
+          showContinue: continueButtons),
       'categories': <Map<String, Object?>>[
         for (final c in (categories ?? []).where((c) => c.hide != true))
           if (c.id != null) <String, Object?>{
