@@ -311,15 +311,41 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
 
   private func updateBars() {
     let bookmarked = isBookmarked
-    navigationItem.title = safeString("title", fallback: "Novel")
+    let bookTitle = safeString("title", fallback: "Novel")
+    let chapterTitle = safeString("subtitle", fallback: "Chapter")
+    let chapterNumber = chapter["chapterIndex"] as? Int ?? 0
+    let chapterTotal = chapter["chapterCount"] as? Int ?? 0
+
+    navigationItem.title = bookTitle
     navigationItem.largeTitleDisplayMode = .never
+    let title = UILabel()
+    title.text = bookTitle
+    title.font = .preferredFont(forTextStyle: .headline)
+    title.textColor = .label
+    title.textAlignment = .center
+    title.lineBreakMode = .byTruncatingTail
+    let subtitle = UILabel()
+    subtitle.text = chapterNumber > 0
+      ? "Chapter \(chapterNumber) of \(chapterTotal) · \(chapterTitle)"
+      : chapterTitle
+    subtitle.font = .preferredFont(forTextStyle: .caption2)
+    subtitle.textColor = .secondaryLabel
+    subtitle.textAlignment = .center
+    subtitle.lineBreakMode = .byTruncatingTail
+    let titles = UIStackView(arrangedSubviews: [title, subtitle])
+    titles.axis = .vertical
+    titles.distribution = .fill
+    titles.spacing = 1
+    navigationItem.titleView = titles
+
     navigationItem.leftBarButtonItem = UIBarButtonItem(
-      barButtonSystemItem: .close, target: self, action: #selector(closeReader))
+      image: UIImage(systemName: "chevron.backward"),
+      style: .plain, target: self, action: #selector(closeReader))
+    navigationItem.leftBarButtonItem?.accessibilityLabel = "Return to novel details"
     let bookmarkItem = UIBarButtonItem(
       image: UIImage(systemName: bookmarked ? "bookmark.fill" : "bookmark"),
       style: .plain, target: self, action: #selector(toggleBookmark))
     bookmarkItem.accessibilityLabel = bookmarked ? "Remove bookmark" : "Bookmark"
-
     let menuItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: makeMenu())
     navigationItem.rightBarButtonItems = [menuItem, bookmarkItem]
 
@@ -327,23 +353,34 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       image: UIImage(systemName: "backward.end.fill"), style: .plain,
       target: self, action: #selector(previousChapter))
     previous.isEnabled = chapter["hasPrevious"] as? Bool ?? false
+    previous.accessibilityLabel = "Previous chapter"
+    let chapterList = UIBarButtonItem(
+      image: UIImage(systemName: "list.number"), style: .plain,
+      target: self, action: #selector(showChapters))
+    chapterList.accessibilityLabel = "All chapters"
+    let settings = UIBarButtonItem(
+      image: UIImage(systemName: "textformat.size"), style: .plain,
+      target: self, action: #selector(showSettings))
+    settings.accessibilityLabel = "Reading settings"
     let next = UIBarButtonItem(
       image: UIImage(systemName: "forward.end.fill"), style: .plain,
       target: self, action: #selector(nextChapter))
     next.isEnabled = chapter["hasNext"] as? Bool ?? false
-    let stretch = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+    next.accessibilityLabel = "Next chapter"
     progressControl.isEnabled = true
+    progressControl.frame.size.width = 112
     toolbarItems = [
-      previous, stretch, progressItem,
+      previous, chapterList,
       UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-      next
+      progressItem,
+      UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
+      settings, next
     ]
-    // No custom gradients, opaque bar backgrounds, or Flutter overlays.
     navigationController?.toolbar.tintColor = .label
   }
 
   private func makeMenu() -> UIMenu {
-    let chapters = UIAction(title: "Chapters", image: UIImage(systemName: "list.number")) { [weak self] _ in
+    let chapters = UIAction(title: "All Chapters", image: UIImage(systemName: "list.number")) { [weak self] _ in
       self?.showChapters()
     }
     let smaller = UIAction(title: "Smaller Text", image: UIImage(systemName: "textformat.size.smaller")) { [weak self] _ in
@@ -373,21 +410,27 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     ])
   }
 
-  private func showChapters() {
+  @objc private func showChapters() {
     guard let chapters = chapter["chapters"] as? [[String: Any]] else { return }
-    let sheet = UIAlertController(title: "Chapters", message: nil, preferredStyle: .actionSheet)
-    for item in chapters {
-      guard let id = item["id"] as? Int else { continue }
-      let title = item["title"] as? String ?? "Chapter"
-      sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
-        self?.onEvent?(["type":"chapter", "id":id])
-      })
+    let picker = NovayomiChapterSheet(chapters: chapters, currentId: chapter["chapterId"] as? Int)
+    picker.onSelect = { [weak self] id in
+      self?.onEvent?(["type": "chapter", "id": id])
     }
-    sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-    if let popover = sheet.popoverPresentationController {
-      popover.barButtonItem = navigationItem.rightBarButtonItems?.first
+    presentReaderSheet(picker)
+  }
+
+  private func presentReaderSheet(_ controller: UIViewController) {
+    // UISheetPresentationController provides the native expandable bottom
+    // sheet, grabber and swipe-to-dismiss behavior on iPhone.
+    let navigation = UINavigationController(rootViewController: controller)
+    navigation.modalPresentationStyle = .pageSheet
+    navigation.overrideUserInterfaceStyle = overrideUserInterfaceStyle
+    if let sheet = navigation.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+      sheet.prefersScrollingExpandsWhenScrolledToEdge = true
     }
-    present(sheet, animated: true)
+    present(navigation, animated: true)
   }
 
   private func adjustFont(_ amount: Int) {
@@ -499,4 +542,80 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     alert.addAction(UIAlertAction(title: "OK", style: .default))
     present(alert, animated: true)
   }
+}
+
+
+/// Searchable, full-length chapter picker: UIKit table in a native resizable
+/// bottom sheet. The reader bridge supplies all chapters, not a 25-item window.
+private final class NovayomiChapterSheet: UITableViewController, UISearchResultsUpdating {
+  var onSelect: ((Int) -> Void)?
+  private let chapters: [(id: Int, title: String)]
+  private var visibleIndices: [Int]
+  private let currentId: Int?
+  private let search = UISearchController(searchResultsController: nil)
+
+  init(chapters: [[String: Any]], currentId: Int?) {
+    self.chapters = chapters.compactMap { item in
+      guard let id = item["id"] as? Int else { return nil }
+      return (id: id, title: item["title"] as? String ?? "Chapter")
+    }
+    self.visibleIndices = Array(self.chapters.indices)
+    self.currentId = currentId
+    super.init(style: .plain)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard init unsupported") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Chapters (\(chapters.count))"
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .done, target: self, action: #selector(done))
+    search.searchResultsUpdater = self
+    search.obscuresBackgroundDuringPresentation = false
+    search.searchBar.placeholder = "Find chapter"
+    navigationItem.searchController = search
+    navigationItem.hidesSearchBarWhenScrolling = false
+    tableView.rowHeight = 54
+  }
+
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    if search.searchBar.text?.isEmpty != false,
+       let row = visibleIndices.firstIndex(where: { chapters[$0].id == currentId }) {
+      tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .middle, animated: false)
+    }
+  }
+
+  func updateSearchResults(for searchController: UISearchController) {
+    let query = searchController.searchBar.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    visibleIndices = query.isEmpty ? Array(chapters.indices) : chapters.indices.filter {
+      chapters[$0].title.localizedCaseInsensitiveContains(query)
+        || String($0 + 1).contains(query)
+    }
+    tableView.reloadData()
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    visibleIndices.count
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "chapter")
+      ?? UITableViewCell(style: .subtitle, reuseIdentifier: "chapter")
+    let idx = visibleIndices[indexPath.row]
+    cell.textLabel?.text = chapters[idx].title
+    cell.textLabel?.numberOfLines = 1
+    cell.detailTextLabel?.text = "Chapter \(idx + 1)"
+    cell.detailTextLabel?.textColor = .secondaryLabel
+    cell.accessoryType = chapters[idx].id == currentId ? .checkmark : .none
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    let id = chapters[visibleIndices[indexPath.row]].id
+    dismiss(animated: true) { [weak self] in self?.onSelect?(id) }
+  }
+
+  @objc private func done() { dismiss(animated: true) }
 }
