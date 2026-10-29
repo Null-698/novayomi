@@ -33,6 +33,7 @@ class NativeNovelReaderScreen extends ConsumerStatefulWidget {
 
 class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScreen> {
   static const _channel = MethodChannel('novayomi/native-reader');
+  static Future<String>? _openDyslexicAsset;
 
   late Chapter _chapter;
   late final Stopwatch _readingTime;
@@ -85,7 +86,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     if (_opening || _presented || !mounted) return;
     _opening = true;
     try {
-      await _channel.invokeMethod<void>('open', _buildPayload(_chapter, data));
+      await _channel.invokeMethod<void>('open', await _buildPayload(_chapter, data));
       if (mounted) _presented = true;
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -94,10 +95,11 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     }
   }
 
-  Map<String, Object?> _buildPayload(
+  Future<Map<String, Object?>> _buildPayload(
     Chapter chapter,
     (String, EpubNovel?) data,
-  ) {
+  ) async {
+    final fontData = await (_openDyslexicAsset ??= _loadOpenDyslexicFont());
     final controller = ref.read(
       novelReaderControllerProvider(chapter: chapter).notifier,
     );
@@ -125,6 +127,10 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
         if (!knownIds.contains(c.id)) c,
     ];
     final index = chapters.indexWhere((c) => c.id == chapter.id);
+    final auto = controller.autoScrollValues();
+    final pageLayout = ref.read(doublePageAutoStateProvider)
+        ? 'auto'
+        : controller.getPageMode() == PageMode.doublePage ? 'double' : 'single';
 
     return <String, Object?>{
       'title': novel?.name ?? 'Novel',
@@ -147,7 +153,17 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       'alignment': ref.read(novelTextAlignStateProvider).name == 'block'
           ? 'justify'
           : ref.read(novelTextAlignStateProvider).name,
-      'fontFamily': _webkitFont(ref.read(novelFontFamilyStateProvider)),
+      'fontFamily': ref.read(novelFontFamilyStateProvider) ?? '',
+      'fontData': fontData,
+      'pageLayout': pageLayout,
+      'keepAwake': ref.read(keepScreenOnReaderStateProvider),
+      'showPercent': ref.read(novelShowScrollPercentageStateProvider),
+      'tapZones': ref.read(novelTapToScrollStateProvider),
+      'autoScroll': auto.$1,
+      'autoScrollSpeed': auto.$2,
+      'ttsSpeed': ref.read(ttsSpeechRateStateProvider),
+      'ttsPitch': ref.read(ttsPitchStateProvider),
+      'ttsLanguage': ref.read(ttsLanguageStateProvider),
       if (baseURL != null) 'baseURL': baseURL.toString(),
       'chapters': [
         for (final entry in chapters)
@@ -160,14 +176,16 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     };
   }
 
-  String _webkitFont(String? value) {
-    switch (value) {
-      case 'Georgia':
-      case 'Palatino':
-      case 'Helvetica':
-        return value!;
-      default:
-        return '';
+  Future<String> _loadOpenDyslexicFont() async {
+    try {
+      final file = await rootBundle.load(
+        'assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf',
+      );
+      return base64Encode(
+        file.buffer.asUint8List(file.offsetInBytes, file.lengthInBytes),
+      );
+    } catch (_) {
+      return '';
     }
   }
 
@@ -256,6 +274,64 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
         if (color != null) {
           ref.read(novelReaderTextColorStateProvider.notifier).set(color);
         }
+      case 'fontFamily':
+        final value = payload['value'] as String?;
+        if (value != null) {
+          ref.read(novelFontFamilyStateProvider.notifier)
+              .set(value.isEmpty ? null : value);
+        }
+      case 'pageLayout':
+        final layout = payload['value'] as String?;
+        if (layout != null) {
+          ref.read(doublePageAutoStateProvider.notifier).set(layout == 'auto');
+          _controller.setPageMode(
+            layout == 'double' ? PageMode.doublePage : PageMode.onePage,
+          );
+        }
+      case 'keepAwake':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(keepScreenOnReaderStateProvider.notifier).set(enabled);
+        }
+      case 'showPercent':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(novelShowScrollPercentageStateProvider.notifier).set(enabled);
+        }
+      case 'tapZones':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(novelTapToScrollStateProvider.notifier).set(enabled);
+        }
+      case 'compactParagraphs':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          ref.read(novelRemoveExtraParagraphSpacingStateProvider.notifier).set(enabled);
+        }
+      case 'autoScroll':
+        final enabled = payload['value'] as bool?;
+        if (enabled != null) {
+          final settings = _controller.autoScrollValues();
+          _controller.setAutoScroll(enabled, settings.$2);
+        }
+      case 'autoScrollSpeed':
+        final speed = (payload['value'] as num?)?.toDouble();
+        if (speed != null) {
+          final settings = _controller.autoScrollValues();
+          _controller.setAutoScroll(settings.$1, speed);
+        }
+      case 'ttsSpeed':
+        final speed = (payload['value'] as num?)?.toDouble();
+        if (speed != null) ref.read(ttsSpeechRateStateProvider.notifier).set(speed);
+      case 'ttsPitch':
+        final pitch = (payload['value'] as num?)?.toDouble();
+        if (pitch != null) ref.read(ttsPitchStateProvider.notifier).set(pitch);
+      case 'ttsLanguage':
+        final language = payload['value'] as String?;
+        if (language != null) {
+          ref.read(ttsLanguageStateProvider.notifier)
+              .set(language.isEmpty ? null : language);
+        }
       case 'alignment':
         final align = payload['value'] as String?;
         if (align != null) {
@@ -320,7 +396,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       if (!mounted || _closing) return;
       await _persistChapter();
       if (!mounted || _closing) return;
-      final next = _buildPayload(target, data);
+      final next = await _buildPayload(target, data);
       await _channel.invokeMethod<void>('replaceChapter', next);
       _chapter = target;
       _progress = (next['progress'] as num?)?.toDouble() ?? 0;
