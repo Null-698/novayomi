@@ -38,6 +38,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let preferencesButton = UIButton(type: .system)
   private let layoutButton = UIButton(type: .system)
   private let refresh = UIRefreshControl()
+  private let selectionBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+  private var selectionHeight: NSLayoutConstraint!
+  private let selectedCount = UILabel()
+  private var selectedIds = Set<Int>()
   private let collection: UICollectionView
   private var entries: [[String: Any]] = []
   private var displayed: [[String: Any]] = []
@@ -123,6 +127,42 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     refresh.addTarget(self, action: #selector(refreshLibrary), for: .valueChanged)
     collection.refreshControl = refresh
     root.addSubview(collection)
+    if #available(iOS 26.0, *) {
+      selectionBar.effect = UIGlassEffect(style: .regular)
+      selectionBar.cornerConfiguration = .capsule()
+    } else {
+      selectionBar.layer.cornerRadius = 18
+      selectionBar.clipsToBounds = true
+    }
+    selectionBar.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(selectionBar)
+    selectedCount.font = .preferredFont(forTextStyle: .subheadline)
+    selectedCount.text = "0 selected"
+    selectedCount.textAlignment = .center
+    let clear = nativeButton("xmark", hint: "Cancel selection", action: #selector(clearSelection))
+    let mark = nativeButton("checkmark.circle", hint: "Mark novels as read", action: #selector(markSelectedRead))
+    let unread = nativeButton("circle", hint: "Mark novels as unread", action: #selector(markSelectedUnread))
+    let categories = nativeButton("tag", hint: "Set categories", action: #selector(selectCategories))
+    let remove = nativeButton("trash", hint: "Remove from library", action: #selector(confirmRemove))
+    let selections = UIStackView(arrangedSubviews: [clear, selectedCount, mark, unread, categories, remove])
+    selections.axis = .horizontal
+    selections.alignment = .center
+    selections.distribution = .fillProportionally
+    selections.spacing = 6
+    selections.translatesAutoresizingMaskIntoConstraints = false
+    selectionBar.contentView.addSubview(selections)
+    selectionHeight = selectionBar.heightAnchor.constraint(equalToConstant: 0)
+    NSLayoutConstraint.activate([
+      selectionHeight,
+      selectionBar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+      selectionBar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
+      selectionBar.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+      selections.leadingAnchor.constraint(equalTo: selectionBar.contentView.leadingAnchor, constant: 10),
+      selections.trailingAnchor.constraint(equalTo: selectionBar.contentView.trailingAnchor, constant: -10),
+      selections.topAnchor.constraint(equalTo: selectionBar.contentView.topAnchor, constant: 4),
+      selections.bottomAnchor.constraint(equalTo: selectionBar.contentView.bottomAnchor, constant: -4)
+    ])
+    selectionBar.isHidden = true
 
     NSLayoutConstraint.activate([
       header.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 8),
@@ -145,7 +185,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       collection.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
       collection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       collection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      collection.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+      collection.bottomAnchor.constraint(equalTo: selectionBar.topAnchor, constant: -4)
     ])
 
     apply(data)
@@ -182,6 +222,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     }
     updateSortMenu()
     rebuildCategories()
+    updateSelectionBar()
     filterAndReload()
   }
 
@@ -301,7 +342,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
                       cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "novel", for: indexPath)
       as! NovayomiLibraryCell
-    cell.configure(item: displayed[indexPath.item], isList: isList)
+    let item = displayed[indexPath.item]
+    cell.configure(item: item, isList: isList,
+                   selected: selectedIds.contains(item["id"] as? Int ?? -1))
     return cell
   }
 
@@ -309,7 +352,98 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
                       didSelectItemAt indexPath: IndexPath) {
     guard displayed.indices.contains(indexPath.item),
           let id = displayed[indexPath.item]["id"] as? Int else { return }
-    channel.invokeMethod("open", arguments: id)
+    if !selectedIds.isEmpty {
+      toggleSelection(id)
+    } else {
+      channel.invokeMethod("open", arguments: id)
+    }
+  }
+
+  private func nativeButton(_ name: String, hint: String, action: Selector) -> UIButton {
+    let button = UIButton(type: .system)
+    button.setImage(UIImage(systemName: name), for: .normal)
+    button.tintColor = .label
+    button.accessibilityLabel = hint
+    button.addTarget(self, action: action, for: .touchUpInside)
+    button.widthAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true
+    button.heightAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
+    return button
+  }
+
+  private func toggleSelection(_ id: Int) {
+    if !selectedIds.insert(id).inserted { selectedIds.remove(id) }
+    updateSelectionBar()
+    collection.reloadData()
+  }
+
+  private func updateSelectionBar() {
+    selectedCount.text = "\(selectedIds.count) selected"
+    let active = !selectedIds.isEmpty
+    selectionHeight.constant = active ? 54 : 0
+    selectionBar.isHidden = !active
+    root.layoutIfNeeded()
+  }
+
+  @objc private func clearSelection() {
+    selectedIds.removeAll()
+    updateSelectionBar()
+    collection.reloadData()
+  }
+
+  @objc private func markSelectedRead() { performBatch("markRead") }
+  @objc private func markSelectedUnread() { performBatch("markUnread") }
+
+  private func performBatch(_ kind: String) {
+    guard !selectedIds.isEmpty else { return }
+    channel.invokeMethod("batch", arguments: [
+      "kind": kind,
+      "ids": Array(selectedIds)
+    ] as [String: Any])
+    clearSelection()
+  }
+
+  @objc private func selectCategories() {
+    guard !selectedIds.isEmpty else { return }
+    let categories = configuration["categories"] as? [[String: Any]] ?? []
+    let picker = NovayomiLibraryCategorySheet(categories: categories) { [weak self] ids in
+      self?.channel.invokeMethod("batch", arguments: [
+        "kind": "setCategories",
+        "ids": Array(self?.selectedIds ?? []),
+        "categories": ids
+      ] as [String: Any])
+      self?.clearSelection()
+    }
+    presentSheet(picker)
+  }
+
+  @objc private func confirmRemove() {
+    guard !selectedIds.isEmpty else { return }
+    let count = selectedIds.count
+    let sheet = UIAlertController(
+      title: "Remove \(count) novel\(count == 1 ? "" : "s") from Library?",
+      message: "Only the library entries will be removed. Downloaded files will be kept.",
+      preferredStyle: .alert)
+    sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    sheet.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+      self?.performBatch("removeFromLibrary")
+    })
+    presentNative(sheet)
+  }
+
+  private func presentNative(_ child: UIViewController) {
+    guard var presenter = root.window?.rootViewController else { return }
+    while let next = presenter.presentedViewController { presenter = next }
+    presenter.present(child, animated: true)
+  }
+
+  private func presentSheet(_ child: UIViewController) {
+    let nav = UINavigationController(rootViewController: child)
+    nav.modalPresentationStyle = .pageSheet
+    if let sheet = nav.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+    }
+    presentNative(nav)
   }
 
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
@@ -339,6 +473,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         },
         UIAction(title: "Copy title", image: UIImage(systemName: "doc.on.doc")) { _ in
           UIPasteboard.general.string = name
+        },
+        UIAction(title: "Select", image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
+          self?.toggleSelection(id)
         }
       ])
     }
@@ -403,9 +540,12 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.image = UIImage(systemName: "book.closed")
   }
 
-  func configure(item: [String: Any], isList: Bool) {
+  func configure(item: [String: Any], isList: Bool, selected: Bool) {
     let id = item["id"] as? Int ?? -1
     represented = String(id)
+    contentView.layer.borderWidth = selected ? 2 : 0
+    contentView.layer.borderColor = UIColor.systemBlue.cgColor
+    contentView.layer.cornerRadius = 9
     title.text = item["name"] as? String ?? "Untitled"
     author.text = item["author"] as? String ?? ""
     cover.image = UIImage(systemName: "book.closed")
@@ -619,5 +759,60 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
       }
     }
     tableView.reloadData()
+  }
+}
+
+
+/// Native UIKit category picker, passing only chosen IDs to Dart's original
+/// MangaRepository.putAll implementation. No native database writes.
+private final class NovayomiLibraryCategorySheet: UITableViewController {
+  private let categories: [(id: Int, title: String)]
+  private let onConfirm: ([Int]) -> Void
+  private var chosen = Set<Int>()
+
+  init(categories: [[String: Any]], onConfirm: @escaping ([Int]) -> Void) {
+    self.categories = categories.compactMap { c in
+      guard let id = c["id"] as? Int else { return nil }
+      return (id, c["name"] as? String ?? "Collection")
+    }
+    self.onConfirm = onConfirm
+    super.init(style: .insetGrouped)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard unsupported") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Set categories"
+    navigationItem.leftBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .done, target: self, action: #selector(done))
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    categories.count
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "category")
+      ?? UITableViewCell(style: .default, reuseIdentifier: "category")
+    let category = categories[indexPath.row]
+    cell.textLabel?.text = category.title
+    cell.accessoryType = chosen.contains(category.id) ? .checkmark : .none
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    let id = categories[indexPath.row].id
+    if !chosen.insert(id).inserted { chosen.remove(id) }
+    tableView.reloadRows(at: [indexPath], with: .none)
+  }
+
+  @objc private func cancel() { dismiss(animated: true) }
+  @objc private func done() {
+    let values = Array(chosen)
+    dismiss(animated: true) { [onConfirm] in onConfirm(values) }
   }
 }
