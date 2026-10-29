@@ -54,6 +54,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var query = ""
   private var isList = false
   private var sortIndex = 0
+  private var gridSize = 0
   private var configuration: [String: Any] = [:]
 
   init(frame: CGRect, identifier: Int64, messenger: FlutterBinaryMessenger,
@@ -227,6 +228,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     }
     if let label = data["title"] as? String { heading.text = label }
     if let index = data["sortIndex"] as? Int { sortIndex = index }
+    if let size = data["gridSize"] as? Int { gridSize = size }
+    collection.collectionViewLayout.invalidateLayout()
     if let list = data["isList"] as? Bool {
       isList = list
       layoutButton.setImage(UIImage(systemName: isList ? "square.grid.2x2" : "list.bullet"),
@@ -489,7 +492,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
                       sizeForItemAt indexPath: IndexPath) -> CGSize {
     let width = collectionView.bounds.inset(by: collectionView.adjustedContentInset).width
     if isList { return CGSize(width: max(1, width - 28), height: 92) }
-    let columns: CGFloat = width > 700 ? 6 : width > 450 ? 4 : 3
+    let columns: CGFloat = gridSize > 0
+      ? CGFloat(min(max(gridSize, 1), 7))
+      : (width > 700 ? 6 : width > 450 ? 4 : 3)
     let itemWidth = max(65, floor((width - 36 - (columns - 1) * 10) / columns))
     return CGSize(width: itemWidth, height: itemWidth * 1.51 + 36)
   }
@@ -689,6 +694,7 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
   private var sortIndex: Int
   private var sortReverse: Bool
   private var displayIndex: Int
+  private var gridSize: Int
 
   private let filterItems: [(String, String)] = [
     ("downloaded", "Downloaded"),
@@ -725,6 +731,7 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
     sortIndex = data["sortIndex"] as? Int ?? 0
     sortReverse = data["sortReverse"] as? Bool ?? false
     displayIndex = data["displayIndex"] as? Int ?? 0
+    gridSize = data["gridSize"] as? Int ?? 0
     super.init(style: .insetGrouped)
   }
 
@@ -765,7 +772,7 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
     switch tabs.selectedSegmentIndex {
     case 0: return section == 0 ? filterItems.count : sources.count
     case 1: return sortItems.count
-    default: return section == 0 ? displayItems.count : toggles.count
+    default: return section == 0 ? displayItems.count + 1 : toggles.count
     }
   }
 
@@ -796,8 +803,13 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
       }
     default:
       if indexPath.section == 0 {
-        cell.textLabel?.text = displayItems[indexPath.row]
-        cell.accessoryType = displayIndex == indexPath.row ? .checkmark : .none
+        if indexPath.row == displayItems.count {
+          cell.textLabel?.text = "Grid columns"
+          cell.detailTextLabel?.text = gridSize == 0 ? "Automatic" : "\(gridSize) per row"
+        } else {
+          cell.textLabel?.text = displayItems[indexPath.row]
+          cell.accessoryType = displayIndex == indexPath.row ? .checkmark : .none
+        }
       } else {
         let entry = toggles[indexPath.row]
         cell.textLabel?.text = entry.1
@@ -827,8 +839,13 @@ private final class NovayomiLibraryPreferencesSheet: UITableViewController {
       onAction("sort", indexPath.row)
     default:
       if indexPath.section == 0 {
-        displayIndex = indexPath.row
-        onAction("display", displayIndex)
+        if indexPath.row == displayItems.count {
+          gridSize = (gridSize + 1) % 8
+          onAction("gridSize", gridSize)
+        } else {
+          displayIndex = indexPath.row
+          onAction("display", displayIndex)
+        }
       } else {
         let key = toggles[indexPath.row].0
         let next = !(settings[key] ?? false)
