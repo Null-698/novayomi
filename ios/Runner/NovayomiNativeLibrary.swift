@@ -36,6 +36,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var categoryHeight: NSLayoutConstraint!
   private let categoryStack = UIStackView()
   private let sortButton = UIButton(type: .system)
+  private let actionsButton = UIButton(type: .system)
   private let preferencesButton = UIButton(type: .system)
   private let layoutButton = UIButton(type: .system)
   private let refresh = UIRefreshControl()
@@ -96,12 +97,16 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     layoutButton.accessibilityLabel = "Change layout"
     layoutButton.addTarget(self, action: #selector(toggleLayout), for: .touchUpInside)
 
+    actionsButton.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+    actionsButton.accessibilityLabel = "Library actions"
+    actionsButton.showsMenuAsPrimaryAction = true
+
     let labels = UIStackView(arrangedSubviews: [heading, total])
     labels.axis = .vertical
     labels.alignment = .leading
     labels.spacing = 1
     let header = UIStackView(arrangedSubviews: [
-      labels, UIView(), preferencesButton, sortButton, layoutButton
+      labels, UIView(), preferencesButton, layoutButton, actionsButton
     ])
     header.axis = .horizontal
     header.alignment = .center
@@ -114,7 +119,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       sortButton.widthAnchor.constraint(equalToConstant: 44),
       sortButton.heightAnchor.constraint(equalToConstant: 44),
       layoutButton.widthAnchor.constraint(equalToConstant: 44),
-      layoutButton.heightAnchor.constraint(equalToConstant: 44)
+      layoutButton.heightAnchor.constraint(equalToConstant: 44),
+      actionsButton.widthAnchor.constraint(equalToConstant: 44),
+      actionsButton.heightAnchor.constraint(equalToConstant: 44)
     ])
 
     search.placeholder = "Search novels"
@@ -298,6 +305,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     categoryScroll.isHidden = !(appearance["showCategories"] ?? true)
     categoryHeight.constant = categoryScroll.isHidden ? 0 : 42
     updateSortMenu()
+    updateActionsMenu()
     rebuildCategories()
     updateSelectionBar()
     filterAndReload()
@@ -314,6 +322,49 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         self?.channel.invokeMethod("sort", arguments: key)
       }
     })
+  }
+
+  private func updateActionsMenu() {
+    actionsButton.menu = UIMenu(children: [
+      UIAction(title: "Update Library", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+        self?.channel.invokeMethod("refresh", arguments: nil)
+      },
+      UIAction(title: "Open Random Novel", image: UIImage(systemName: "shuffle")) { [weak self] _ in
+        self?.channel.invokeMethod("random", arguments: nil)
+      },
+      UIAction(title: "Import EPUB", image: UIImage(systemName: "square.and.arrow.down")) { [weak self] _ in
+        self?.showImportOptions()
+      },
+      UIAction(title: "Manage Collections", image: UIImage(systemName: "folder")) { [weak self] _ in
+        self?.openCategoryManager()
+      }
+    ])
+  }
+
+  private func showImportOptions() {
+    let alert = UIAlertController(
+      title: "Import EPUB",
+      message: "Choose how to import chapters. The iOS document picker opens next.",
+      preferredStyle: .actionSheet)
+    alert.addAction(UIAlertAction(title: "Split into chapters", style: .default) { [weak self] _ in
+      self?.channel.invokeMethod("import", arguments: true)
+    })
+    alert.addAction(UIAlertAction(title: "Keep as one chapter", style: .default) { [weak self] _ in
+      self?.channel.invokeMethod("import", arguments: false)
+    })
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    if let popover = alert.popoverPresentationController {
+      popover.sourceView = actionsButton
+      popover.sourceRect = actionsButton.bounds
+    }
+    presentNative(alert)
+  }
+
+  private func openCategoryManager() {
+    let manager = NovayomiLibraryCategoryManager(categories: configuration["allCategories"] as? [[String: Any]] ?? []) { [weak self] action in
+      self?.channel.invokeMethod("manageCategory", arguments: action)
+    }
+    presentSheet(manager)
   }
 
   private func rebuildCategories() {
