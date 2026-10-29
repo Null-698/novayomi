@@ -24,6 +24,7 @@ double novelBottomBarHeightAbove(BuildContext context) {
     mediaQuery.viewPadding.bottom,
     mediaQuery.systemGestureInsets.bottom,
   );
+  if (defaultTargetPlatform == TargetPlatform.iOS) return bottomInset + 130;
   // The slider row (38 and its padding), the rule, the actions.
   return bottomInset +
       ShioriSpace.s8 +
@@ -174,6 +175,168 @@ class NovelBottomBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final bottomInset = max(
+        MediaQuery.viewPaddingOf(context).bottom,
+        MediaQuery.systemGestureInsetsOf(context).bottom,
+      );
+      final duration = ShioriMotion.of(context, ShioriMotion.enter);
+      final curve = isVisible ? ShioriMotion.enterCurve : ShioriMotion.exitCurve;
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: ReaderChromeGate(
+          shown: isVisible,
+          child: AnimatedSlide(
+            offset: isVisible ? Offset.zero : const Offset(0, 1),
+            duration: duration,
+            curve: curve,
+            child: AnimatedOpacity(
+              opacity: isVisible ? 1 : 0,
+              duration: duration,
+              curve: curve,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  ShioriSpace.s8,
+                  0,
+                  ShioriSpace.s8,
+                  bottomInset + ShioriSpace.s8,
+                ),
+                child: SizedBox(
+                  height: 112,
+                  child: StreamBuilder<double>(
+                    stream: rebuildStream,
+                    builder: (context, snapshot) {
+                      final isContinuous = readerMode.isContinuous;
+                      final pagination = cachedPagination();
+                      final isDouble = effectivePageMode == PageMode.doublePage;
+                      final totalItems = isDouble
+                          ? (pagination?.spreadCount ?? 1)
+                          : (pagination?.pageCount ?? 1);
+                      final currentItem = currentSpreadIndex()
+                          .clamp(0, max(0, totalItems - 1))
+                          .toInt();
+                      final scrollExtent = maxOffset();
+                      final scrollValue = scrollExtent > 0
+                          ? (offset() / scrollExtent).clamp(0.0, 1.0).toDouble()
+                          : 0.0;
+                      final value = isContinuous
+                          ? scrollValue
+                          : totalItems > 1
+                          ? currentItem / (totalItems - 1)
+                          : 0.0;
+                      final current = isContinuous
+                          ? (scrollValue * 100).round().toString() + '%'
+                          : (isDouble
+                              ? (pagination?.spreadLabelForSpread(currentItem) ??
+                                  (currentItem + 1).toString())
+                              : (currentItem + 1).toString());
+                      final total = isContinuous
+                          ? '100%'
+                          : (pagination?.pageCount ?? totalItems).toString();
+                      return NativeIosBar(
+                        kind: 'readerBottom',
+                        data: <String, Object?>{
+                          'current': current,
+                          'total': total,
+                          'progress': value,
+                          'hasPrevious': readerController.hasPreviousChapter,
+                          'hasNext': readerController.hasNextChapter,
+                          'ttsSupported': ttsSupported,
+                          'ttsActive': showTts,
+                          'layoutSymbol': isContinuous
+                              ? 'rectangle.stack'
+                              : isDouble
+                              ? 'book.closed'
+                              : 'doc.text',
+                        },
+                        onSeek: (fraction) {
+                          if (isContinuous) {
+                            if (scrollController.hasClients) {
+                              scrollController.jumpTo(
+                                scrollController.position.maxScrollExtent *
+                                    fraction,
+                              );
+                            }
+                          } else if (totalItems > 1 &&
+                              spreadController.hasClients) {
+                            spreadController.jumpToPage(
+                              (fraction * (totalItems - 1)).round(),
+                            );
+                          }
+                        },
+                        onAction: (action) {
+                          switch (action) {
+                            case 'previousChapter':
+                              if (readerController.hasPreviousChapter) {
+                                pushReplacementMangaReaderView(
+                                  context: context,
+                                  chapter: readerController.getPrevChapter(),
+                                );
+                              }
+                            case 'nextChapter':
+                              if (readerController.hasNextChapter) {
+                                pushReplacementMangaReaderView(
+                                  context: context,
+                                  chapter: readerController.getNextChapter(),
+                                );
+                              }
+                            case 'chapters':
+                              showChapterListPanel(
+                                context,
+                                title: context.l10n.chapters,
+                                chapter: chapter,
+                              );
+                            case 'font':
+                              showNovelFontSizeBottomSheet(
+                                context,
+                                onFontSizeChanged: onFontSizeChanged,
+                              );
+                            case 'layout':
+                              if (isContinuous) {
+                                readerController.setReaderMode(ReaderMode.ltr);
+                                readerController.setPageMode(PageMode.onePage);
+                                ref.read(doublePageAutoStateProvider.notifier)
+                                    .set(false);
+                                onLayoutModeCycled(
+                                  ReaderMode.ltr,
+                                  PageMode.onePage,
+                                );
+                              } else if (effectivePageMode == PageMode.onePage) {
+                                readerController.setPageMode(PageMode.doublePage);
+                                ref.read(doublePageAutoStateProvider.notifier)
+                                    .set(false);
+                                onLayoutModeCycled(
+                                  readerMode,
+                                  PageMode.doublePage,
+                                );
+                              } else {
+                                readerController.setReaderMode(
+                                  ReaderMode.verticalContinuous,
+                                );
+                                onLayoutModeCycled(
+                                  ReaderMode.verticalContinuous,
+                                  effectivePageMode,
+                                );
+                              }
+                            case 'tts':
+                              if (ttsSupported) onToggleTts();
+                            case 'settings':
+                              onOpenSettings();
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final hasPrevChapter = readerController.hasPreviousChapter;
     final hasNextChapter = readerController.hasNextChapter;
     final mediaQuery = MediaQuery.of(context);

@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:mangayomi/modules/reader_common/key_bindings.dart';
 import 'package:mangayomi/modules/novel/utils/reading_time.dart';
 import 'package:shiori/shiori.dart';
@@ -310,6 +312,9 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
     });
     final backgroundColor = ref.watch(backgroundColorStateProvider);
     final fullScreenReader = ref.watch(fullScreenReaderStateProvider);
+    final nativeIosReader = defaultTargetPlatform == TargetPlatform.iOS;
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final doublePageAuto = ref.watch(doublePageAutoStateProvider);
     final orientation = MediaQuery.orientationOf(context);
     final effectivePageMode = doublePageAuto
@@ -361,7 +366,7 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
         },
         child: Material(
           child: SafeArea(
-            top: !fullScreenReader,
+            top: !fullScreenReader && !nativeIosReader,
             bottom: false,
             child: widget.result.when(
               data: (data) {
@@ -477,7 +482,7 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
                                       );
 
                                       if (!_readerMode.isContinuous) {
-                                        return buildPaginatedSpreadView(
+                                        final spread = buildPaginatedSpreadView(
                                           effectivePageMode: effectivePageMode,
                                           htmlData: htmlData,
                                           fontSize: fontSize,
@@ -492,6 +497,15 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
                                               parsedBackgroundColor,
                                           tts: tts,
                                         );
+                                        return nativeIosReader
+                                            ? Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: safeTop + 66,
+                                                  bottom: safeBottom + 140,
+                                                ),
+                                                child: spread,
+                                              )
+                                            : spread;
                                       }
 
                                       return Scrollbar(
@@ -507,8 +521,15 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
                                             physics:
                                                 const BouncingScrollPhysics(),
                                             slivers: [
-                                              SliverToBoxAdapter(
-                                                child: NovelHtmlContent(
+                                              SliverPadding(
+                                                padding: nativeIosReader
+                                                    ? EdgeInsets.only(
+                                                        top: safeTop + 66,
+                                                        bottom: safeBottom + 140,
+                                                      )
+                                                    : EdgeInsets.zero,
+                                                sliver: SliverToBoxAdapter(
+                                                  child: NovelHtmlContent(
                                                   htmlData: htmlData,
                                                   fontFamily: fontFamily,
                                                   fontSize: fontSize,
@@ -523,6 +544,7 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
                                                   showTts: showTts,
                                                   tts: tts,
                                                   epubBook: epubBook,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -554,6 +576,34 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
                       onPageStep: _onBtnTapped,
                       onToggleUi: _isViewFunction,
                     ),
+                    // The UIKit effects protect content scrolling under the
+                    // system status area and the native reader controls.
+                    if (nativeIosReader)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: safeTop + 105,
+                        child: const IgnorePointer(
+                          child: NativeIosBar(
+                            kind: 'readerEdgeTop',
+                            data: <String, Object?>{},
+                          ),
+                        ),
+                      ),
+                    if (nativeIosReader && _isView)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: safeBottom + 166,
+                        child: const IgnorePointer(
+                          child: NativeIosBar(
+                            kind: 'readerEdgeBottom',
+                            data: <String, Object?>{},
+                          ),
+                        ),
+                      ),
                     _appBar(),
                     _bottomBar(backgroundColor, effectivePageMode),
                     ReaderAutoScrollButton(
@@ -675,7 +725,7 @@ class _NovelWebViewState extends ConsumerState<NovelWebView>
       backgroundColor: _backgroundColor,
       // In the bottom panel, within reach.
       showChapterList: false,
-      onBackPressed: () => Navigator.pop(context),
+      onBackPressed: () => _goBack(context),
       onBookmarkPressed: () {
         readerController.setChapterBookmarked();
         setState(() => _isBookmarked = !_isBookmarked);

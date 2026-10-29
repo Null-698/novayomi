@@ -78,7 +78,9 @@ class ReaderAppBar extends ConsumerWidget {
     final curve = isVisible ? ShioriMotion.enterCurve : ShioriMotion.exitCurve;
     // Out of a safe area when full screen: the bar reaches under the status
     // bar and keeps its content clear of it.
-    final topInset = fullScreenReader ? MediaQuery.paddingOf(context).top : 0.0;
+    final topInset = defaultTargetPlatform == TargetPlatform.iOS
+        ? MediaQuery.viewPaddingOf(context).top
+        : (fullScreenReader ? MediaQuery.paddingOf(context).top : 0.0);
     final refresh = !isLocalArchive ? onRefreshPressed : null;
     final webView = !isLocalArchive ? onWebViewPressed : null;
 
