@@ -40,6 +40,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let refresh = UIRefreshControl()
   private let selectionBar = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
   private var selectionHeight: NSLayoutConstraint!
+  private var collectionBottom: NSLayoutConstraint!
   private let selectedCount = UILabel()
   private var selectedIds = Set<Int>()
   private let collection: UICollectionView
@@ -151,7 +152,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     selections.spacing = 6
     selections.translatesAutoresizingMaskIntoConstraints = false
     selectionBar.contentView.addSubview(selections)
-    selectionHeight = selectionBar.heightAnchor.constraint(equalToConstant: 0)
+    selectionHeight = selectionBar.heightAnchor.constraint(equalToConstant: 54)
+    collectionBottom = collection.bottomAnchor.constraint(
+      equalTo: root.safeAreaLayoutGuide.bottomAnchor)
     NSLayoutConstraint.activate([
       selectionHeight,
       selectionBar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
@@ -185,7 +188,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       collection.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
       collection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       collection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      collection.bottomAnchor.constraint(equalTo: selectionBar.topAnchor, constant: -4)
+      collectionBottom
     ])
 
     apply(data)
@@ -379,7 +382,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private func updateSelectionBar() {
     selectedCount.text = "\(selectedIds.count) selected"
     let active = !selectedIds.isEmpty
-    selectionHeight.constant = active ? 54 : 0
+    collectionBottom.constant = active ? -68 : 0
     selectionBar.isHidden = !active
     root.layoutIfNeeded()
   }
