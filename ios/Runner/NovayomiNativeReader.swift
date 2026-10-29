@@ -517,11 +517,9 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   private func applyReaderSetting(key: String, value: Any) {
     switch key {
     case "fontSize":
-      guard let size = value as? Int else { return }
-      setFontSize(size)
+      if let size = value as? Int { setFontSize(size) }
     case "lineHeight":
-      guard let spacing = value as? Double else { return }
-      setLineHeight(spacing)
+      if let spacing = value as? Double { setLineHeight(spacing) }
     case "padding":
       guard let inset = value as? Int else { return }
       chapter["padding"] = inset
@@ -534,28 +532,116 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       guard let selected = value as? String else { return }
       let palette: (String, String)
       switch selected {
-      case "light": palette = ("#FFFFFF", "#202020")
-      case "sepia": palette = ("#F5ECD8", "#473829")
+      case "light": palette = ("#FFFFFF", "#000000")
+      case "black": palette = ("#000000", "#FFFFFF")
+      case "sepia": palette = ("#F5E6D3", "#5F4B32")
       default: palette = ("#292832", "#CCCCCC")
       }
       chapter["background"] = palette.0
       chapter["foreground"] = palette.1
       onEvent?(["type": "background", "value": palette.0])
       onEvent?(["type": "foreground", "value": palette.1])
-      view.backgroundColor = readerBackground()
-      webView.backgroundColor = readerBackground()
-      overrideUserInterfaceStyle = isDarkBook ? .dark : .light
-      navigationController?.overrideUserInterfaceStyle = isDarkBook ? .dark : .light
-      setNeedsStatusBarAppearanceUpdate()
-      applyReaderCSS("document.documentElement.style.backgroundColor = '\(palette.0)'; document.body.style.backgroundColor = '\(palette.0)'; document.body.style.color = '\(palette.1)'")
+      updateReaderPalette()
+    case "background", "foreground":
+      guard let hex = value as? String else { return }
+      chapter[key] = hex
+      onEvent?(["type": key, "value": hex])
+      updateReaderPalette()
+    case "fontFamily":
+      guard let font = value as? String else { return }
+      chapter["fontFamily"] = font
+      onEvent?(["type": "fontFamily", "value": font])
+      applyReaderFont()
+    case "pageLayout":
+      guard let layout = value as? String else { return }
+      chapter["pageLayout"] = layout
+      onEvent?(["type": "pageLayout", "value": layout])
+      if readingMode == "pages" {
+        currentProgress = progressFraction()
+        renderChapter()
+      }
+    case "keepAwake":
+      guard let enabled = value as? Bool else { return }
+      chapter["keepAwake"] = enabled
+      UIApplication.shared.isIdleTimerDisabled = enabled
+      onEvent?(["type": "keepAwake", "value": enabled])
+    case "showPercent":
+      guard let enabled = value as? Bool else { return }
+      chapter["showPercent"] = enabled
+      updatePercentLabel()
+      onEvent?(["type": "showPercent", "value": enabled])
+    case "tapZones":
+      guard let enabled = value as? Bool else { return }
+      tapZonesEnabled = enabled
+      chapter["tapZones"] = enabled
+      onEvent?(["type": "tapZones", "value": enabled])
+    case "compactParagraphs":
+      guard let enabled = value as? Bool else { return }
+      chapter["compactParagraphs"] = enabled
+      onEvent?(["type": "compactParagraphs", "value": enabled])
+      applyReaderCSS("document.querySelectorAll('p').forEach(p => p.style.marginBottom = '\(enabled ? 4 : 8)px')")
+    case "autoScroll":
+      guard let enabled = value as? Bool else { return }
+      autoScrollEnabled = enabled
+      chapter["autoScroll"] = enabled
+      onEvent?(["type": "autoScroll", "value": enabled])
+      configureAutoScroll()
+    case "autoScrollSpeed":
+      guard let speed = value as? Double else { return }
+      autoScrollSpeed = speed
+      chapter["autoScrollSpeed"] = speed
+      onEvent?(["type": "autoScrollSpeed", "value": speed])
+    case "brightness":
+      guard let brightness = value as? Double else { return }
+      if previousBrightness == nil { previousBrightness = UIScreen.main.brightness }
+      UIScreen.main.brightness = CGFloat(brightness)
+    case "ttsSpeed":
+      guard let speed = value as? Double else { return }
+      ttsSpeed = speed
+      chapter["ttsSpeed"] = speed
+      onEvent?(["type": "ttsSpeed", "value": speed])
+    case "ttsPitch":
+      guard let pitch = value as? Double else { return }
+      ttsPitch = pitch
+      chapter["ttsPitch"] = pitch
+      onEvent?(["type": "ttsPitch", "value": pitch])
+    case "ttsLanguage":
+      guard let language = value as? String else { return }
+      ttsLanguage = language.isEmpty ? nil : language
+      chapter["ttsLanguage"] = ttsLanguage
+      onEvent?(["type": "ttsLanguage", "value": language])
     case "alignment":
-      guard let align = value as? String, ["left", "center", "right", "justify"].contains(align) else { return }
+      guard let align = value as? String,
+            ["left", "center", "right", "justify"].contains(align) else { return }
       chapter["alignment"] = align
       onEvent?(["type": "alignment", "value": align])
       applyReaderCSS("document.getElementById('book').style.textAlign = '\(align)'")
-    default:
-      break
+    default: break
     }
+  }
+
+  private func updateReaderPalette() {
+    let background = cssColor("background", fallback: "#292832")
+    let foreground = cssColor("foreground", fallback: "#CCCCCC")
+    view.backgroundColor = readerBackground()
+    webView.backgroundColor = readerBackground()
+    overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+    navigationController?.overrideUserInterfaceStyle = isDarkBook ? .dark : .light
+    setNeedsStatusBarAppearanceUpdate()
+    applyReaderCSS("document.documentElement.style.backgroundColor = '\(background)'; document.body.style.backgroundColor = '\(background)'; document.body.style.color = '\(foreground)'")
+  }
+
+  private func applyReaderFont() {
+    let key = safeString("fontFamily", fallback: "")
+    let family: String
+    switch key {
+    case "OpenDyslexic": family = "NovayomiDyslexic"
+    case "Lexend": family = "Lexend"
+    case "AtkinsonHyperlegible": family = "Atkinson Hyperlegible"
+    default: family = "-apple-system"
+    }
+    // Family names come from a fixed local list, never from chapter HTML.
+    applyReaderCSS("document.body.style.fontFamily = '\(family)'")
   }
 
   private func applyReaderCSS(_ script: String) {
@@ -569,14 +655,14 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   }
 
   private func setFontSize(_ newSize: Int) {
-    fontSize = min(36, max(10, newSize))
+    fontSize = min(40, max(8, newSize))
     chapter["fontSize"] = fontSize
     onEvent?(["type": "fontSize", "value": fontSize])
     applyReaderCSS("document.documentElement.style.setProperty('--reader-size', '\(fontSize)px')")
   }
 
   private func setLineHeight(_ newHeight: Double) {
-    lineHeight = min(2.6, max(1.0, (newHeight * 10).rounded() / 10))
+    lineHeight = min(3, max(1.0, (newHeight * 10).rounded() / 10))
     chapter["lineHeight"] = lineHeight
     onEvent?(["type": "lineHeight", "value": lineHeight])
     applyReaderCSS("document.documentElement.style.setProperty('--reader-line', '\(lineHeight)')")
@@ -608,7 +694,11 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     webView.evaluateJavaScript("document.body.innerText") { [weak self] result, _ in
       guard let self, let content = result as? String, !content.isEmpty else { return }
       let utterance = AVSpeechUtterance(string: content)
-      utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+      utterance.rate = Float(min(max(self.ttsSpeed, 0.1), 1))
+      utterance.pitchMultiplier = Float(min(max(self.ttsPitch, 0.5), 2))
+      if let language = self.ttsLanguage {
+        utterance.voice = AVSpeechSynthesisVoice(language: language)
+      }
       self.speech.speak(utterance)
       self.updateBars()
     }
