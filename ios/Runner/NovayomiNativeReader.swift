@@ -1741,17 +1741,27 @@ private final class NovayomiFontSizeSheet: UIViewController {
     row.alignment = .center
     valueLabel.widthAnchor.constraint(equalToConstant: 62).isActive = true
     column.addArrangedSubview(row)
+    // Flutter used a Wrap for its seven presets, not a cramped seven-item
+    // horizontal toolbar. Use two equally-sized native rows on iPhone.
     let presets = UIStackView()
-    presets.axis = .horizontal
-    presets.distribution = .fillEqually
-    presets.spacing = 4
-    for size in sizes {
-      let button = UIButton(type: .system)
-      button.configuration = .tinted()
-      button.setTitle("\(size)", for: .normal)
-      button.tag = size
-      button.addTarget(self, action: #selector(presetTapped(_:)), for: .touchUpInside)
-      presets.addArrangedSubview(button)
+    presets.axis = .vertical
+    presets.spacing = 8
+    for group in [Array(sizes.prefix(4)), Array(sizes.suffix(3))] {
+      let row = UIStackView()
+      row.axis = .horizontal
+      row.alignment = .fill
+      row.distribution = .fillEqually
+      row.spacing = 8
+      for size in group {
+        let button = UIButton(type: .system)
+        button.configuration = .tinted()
+        button.setTitle("\(size)", for: .normal)
+        button.tag = size
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
+        button.addTarget(self, action: #selector(presetTapped(_:)), for: .touchUpInside)
+        row.addArrangedSubview(button)
+      }
+      presets.addArrangedSubview(row)
     }
     column.addArrangedSubview(presets)
     let reset = UIButton(type: .system)
