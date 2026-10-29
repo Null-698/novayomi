@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/chapter.dart';
 import 'package:mangayomi/modules/reader_common/widgets/btn_chapter_list_dialog.dart';
@@ -79,6 +81,57 @@ class ReaderAppBar extends ConsumerWidget {
     final topInset = fullScreenReader ? MediaQuery.paddingOf(context).top : 0.0;
     final refresh = !isLocalArchive ? onRefreshPressed : null;
     final webView = !isLocalArchive ? onWebViewPressed : null;
+
+    // Real UIKit UINavigationBar on iOS. The existing Flutter toolbar remains
+    // a fallback for other platforms and shared manga reader configurations.
+    if (defaultTargetPlatform == TargetPlatform.iOS && !showChapterList) {
+      return Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: ReaderChromeGate(
+          shown: isVisible,
+          child: AnimatedSlide(
+            offset: isVisible ? Offset.zero : const Offset(0, -1),
+            duration: duration,
+            curve: curve,
+            child: AnimatedOpacity(
+              opacity: isVisible ? 1 : 0,
+              duration: duration,
+              curve: curve,
+              child: Padding(
+                padding: EdgeInsets.only(top: topInset),
+                child: SizedBox(
+                  height: kToolbarHeight,
+                  child: NativeIosBar(
+                    kind: 'readerTop',
+                    data: <String, Object?>{
+                      'title': mangaName,
+                      'subtitle': chapterTitle,
+                      'bookmarked': isBookmarked,
+                      'canOpenWeb': webView != null,
+                      'canRefresh': refresh != null,
+                    },
+                    onAction: (action) {
+                      switch (action) {
+                        case 'back':
+                          onBackPressed();
+                        case 'bookmark':
+                          onBookmarkPressed();
+                        case 'refresh':
+                          refresh?.call();
+                        case 'web':
+                          webView?.call();
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Positioned(
       top: 0,

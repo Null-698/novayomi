@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/chapter.dart';
 import 'package:mangayomi/models/settings.dart';
@@ -206,7 +208,9 @@ class NovelBottomBar extends ConsumerWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Material(
-                    color: backgroundColor(context),
+                    color: defaultTargetPlatform == TargetPlatform.iOS
+                        ? Colors.transparent
+                        : backgroundColor(context),
                     borderRadius: BorderRadius.circular(ShioriShape.sheet),
                     clipBehavior: Clip.antiAlias,
                     child: Column(
@@ -434,7 +438,75 @@ class NovelBottomBar extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                             horizontal: ShioriSpace.s12,
                           ),
-                          child: Row(
+                          child: defaultTargetPlatform == TargetPlatform.iOS
+                              ? NativeIosBar(
+                                  kind: 'readerToolbar',
+                                  data: <String, Object?>{
+                                    'ttsSupported': ttsSupported,
+                                    'ttsActive': showTts,
+                                    'layoutSymbol': readerMode.isContinuous
+                                        ? 'rectangle.stack'
+                                        : effectivePageMode == PageMode.doublePage
+                                        ? 'book.closed'
+                                        : 'doc.text',
+                                  },
+                                  onAction: (action) {
+                                    switch (action) {
+                                      case 'chapters':
+                                        showChapterListPanel(
+                                          context,
+                                          title: context.l10n.chapters,
+                                          chapter: chapter,
+                                        );
+                                      case 'font':
+                                        showNovelFontSizeBottomSheet(
+                                          context,
+                                          onFontSizeChanged: onFontSizeChanged,
+                                        );
+                                      case 'layout':
+                                        if (readerMode.isContinuous) {
+                                          readerController.setReaderMode(
+                                            ReaderMode.ltr,
+                                          );
+                                          readerController.setPageMode(
+                                            PageMode.onePage,
+                                          );
+                                          ref
+                                              .read(doublePageAutoStateProvider.notifier)
+                                              .set(false);
+                                          onLayoutModeCycled(
+                                            ReaderMode.ltr,
+                                            PageMode.onePage,
+                                          );
+                                        } else if (effectivePageMode ==
+                                            PageMode.onePage) {
+                                          readerController.setPageMode(
+                                            PageMode.doublePage,
+                                          );
+                                          ref
+                                              .read(doublePageAutoStateProvider.notifier)
+                                              .set(false);
+                                          onLayoutModeCycled(
+                                            readerMode,
+                                            PageMode.doublePage,
+                                          );
+                                        } else {
+                                          readerController.setReaderMode(
+                                            ReaderMode.verticalContinuous,
+                                          );
+                                          onLayoutModeCycled(
+                                            ReaderMode.verticalContinuous,
+                                            effectivePageMode,
+                                          );
+                                        }
+                                      case 'tts':
+                                        if (ttsSupported) onToggleTts();
+                                      case 'settings':
+                                        onOpenSettings();
+                                    }
+                                  },
+                                )
+                              : Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
                               IconButton(
