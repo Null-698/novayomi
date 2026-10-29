@@ -306,7 +306,7 @@ private final class NovayomiReaderBottomView: UIView {
 
   private let glass: UIVisualEffectView
   private let previous = UIButton(type: .system)
-  private let next = UIButton(type: .system)
+  private let nextChapterButton = UIButton(type: .system)
   private let progress = UISlider()
   private let currentLabel = UILabel()
   private let totalLabel = UILabel()
@@ -337,7 +337,7 @@ private final class NovayomiReaderBottomView: UIView {
     ])
 
     configureButton(previous, symbol: "backward.end.fill", identifier: "previousChapter")
-    configureButton(next, symbol: "forward.end.fill", identifier: "nextChapter")
+    configureButton(nextChapterButton, symbol: "forward.end.fill", identifier: "nextChapter")
     for label in [currentLabel, totalLabel] {
       label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
       label.textColor = .label
@@ -353,7 +353,7 @@ private final class NovayomiReaderBottomView: UIView {
     progress.addTarget(self, action: #selector(seekChanged(_:)), for: .valueChanged)
 
     let top = UIStackView(arrangedSubviews: [
-      previous, currentLabel, progress, totalLabel, next
+      previous, currentLabel, progress, totalLabel, nextChapterButton
     ])
     top.axis = .horizontal
     top.alignment = .center
@@ -410,7 +410,7 @@ private final class NovayomiReaderBottomView: UIView {
       progress.value = Float(min(max(args["progress"] as? Double ?? 0, 0), 1))
     }
     previous.isEnabled = args["hasPrevious"] as? Bool ?? false
-    next.isEnabled = args["hasNext"] as? Bool ?? false
+    nextChapterButton.isEnabled = args["hasNext"] as? Bool ?? false
     actions["tts"]?.isHidden = !(args["ttsSupported"] as? Bool ?? false)
     actions["tts"]?.tintColor = (args["ttsActive"] as? Bool ?? false)
       ? .systemBlue : .label
