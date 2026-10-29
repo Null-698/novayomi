@@ -17,6 +17,8 @@ import 'package:mangayomi/modules/more/categories/providers/isar_providers.dart'
 import 'package:mangayomi/modules/more/providers/downloaded_only_state_provider.dart';
 import 'package:mangayomi/utils/constant.dart';
 import 'package:mangayomi/repositories/manga_repository.dart';
+import 'package:mangayomi/repositories/chapter_repository.dart';
+import 'package:mangayomi/modules/history/providers/isar_providers.dart';
 import 'package:mangayomi/repositories/history_repository.dart';
 import 'package:mangayomi/modules/more/providers/incognito_mode_state_provider.dart';
 import 'package:mangayomi/utils/extensions/chapter_extensions.dart';
@@ -72,6 +74,13 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           context: context,
           entry: selected,
         );
+      case 'resumeChapter':
+        final chapterId = call.arguments;
+        if (chapterId is! int) return;
+        final chapter = chapterRepository.findByIdSync(chapterId);
+        if (chapter != null && mounted) {
+          await chapter.pushToReaderView(context);
+        }
       case 'resume':
         final id = call.arguments;
         if (id is! int) return;
@@ -370,6 +379,30 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
       itemType: ItemType.novel, settings: settings,
     ));
     final continueShelf = ref.watch(continueShelfProvider);
+    final historyRows = ref.watch(getAllHistoryStreamProvider(
+      itemType: ItemType.novel,
+    )).asData?.value;
+    // Preserve Flutter's batching and deduplication: no per-cover history
+    // subscription, and don't confuse the last *read chapter* with the book.
+    final continueList = () {
+      if (!continueShelf || historyRows == null || historyRows.isEmpty) {
+        return const <ContinueEntry>[];
+      }
+      final chapterIds = historyRows.map((row) => row.chapterId)
+          .nonNulls.toList();
+      final chapterById = {
+        for (final chapter in chapterRepository.getAllByIds(chapterIds).nonNulls)
+          chapter.id!: chapter,
+      };
+      final mangaIds = chapterById.values.map((chapter) => chapter.mangaId)
+          .nonNulls.toSet().toList();
+      final mangaById = {
+        for (final manga in mangaRepository.getAllByIds(mangaIds).nonNulls)
+          manga.id!: manga,
+      };
+      return continueEntries(historyRows,
+        chapterById: chapterById, mangaById: mangaById);
+    }();
     final availableSources = ref.watch(mangaFilterSourceStateProvider(
       mangaList: books, itemType: ItemType.novel, settings: settings,
     )).$1;
@@ -397,6 +430,16 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           downloadedIds: downloadedIds,
           showDownloaded: downloadBadges,
           showContinue: continueButtons),
+      'continueItems': <Map<String, Object?>>[
+        for (final item in continueList)
+          if (item.manga.id != null && item.chapter.id != null)
+            {
+              'id': item.manga.id!,
+              'chapterId': item.chapter.id!,
+              'chapterName': item.chapter.name ?? 'Chapter',
+              'progress': item.progress,
+            },
+      ],
       'visibleIds': [
         for (final book in (sort.reverse == true
             ? (sort.index == 3
