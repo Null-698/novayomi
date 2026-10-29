@@ -208,10 +208,13 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       let button = UIButton(type: .system)
       var configuration = UIButton.Configuration.tinted()
       configuration.cornerStyle = .capsule
-      let selected = (selectedCategory == option.1) && (onlyUncategorized == (option.1 == -1))
+      let selected = option.1 == -1
+        ? onlyUncategorized
+        : (option.1 == nil ? selectedCategory == nil && !onlyUncategorized
+                            : selectedCategory == option.1 && !onlyUncategorized)
       configuration.title = option.0
       configuration.baseForegroundColor = selected ? .white : .label
-      configuration.baseBackgroundColor = selected ? .tintColor : .secondarySystemBackground
+      configuration.baseBackgroundColor = selected ? .systemBlue : .secondarySystemBackground
       button.configuration = configuration
       button.tag = index
       button.accessibilityIdentifier = "category-\(option.1 ?? 0)"
@@ -324,6 +327,8 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   private let title = UILabel()
   private let author = UILabel()
   private let stack = UIStackView()
+  private var coverHeight: NSLayoutConstraint!
+  private var coverWidth: NSLayoutConstraint!
   private var loadTask: URLSessionDataTask?
   private var represented = ""
 
@@ -347,6 +352,9 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     stack.addArrangedSubview(title)
     stack.addArrangedSubview(author)
     contentView.addSubview(stack)
+    coverHeight = cover.heightAnchor.constraint(equalToConstant: 170)
+    coverWidth = cover.widthAnchor.constraint(equalToConstant: 60)
+    coverHeight.isActive = true
     NSLayoutConstraint.activate([
       stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -375,10 +383,15 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.image = UIImage(systemName: "book.closed")
 
     if isList {
+      coverHeight.constant = 78
+      coverWidth.isActive = true
       stack.axis = .horizontal
-      cover.widthAnchor.constraint(equalToConstant: 60).isActive = false
+      stack.alignment = .center
     } else {
+      coverWidth.isActive = false
+      coverHeight.constant = max(80, bounds.width * 1.44)
       stack.axis = .vertical
+      stack.alignment = .fill
     }
     if let bytes = (item["coverBytes"] as? FlutterStandardTypedData)?.data,
        let image = UIImage(data: bytes) {
@@ -412,7 +425,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   override func layoutSubviews() {
     super.layoutSubviews()
     if stack.axis == .vertical {
-      cover.heightAnchor.constraint(equalToConstant: max(90, bounds.width * 1.44)).isActive = false
+      coverHeight.constant = max(80, bounds.width * 1.44)
     }
   }
 }
