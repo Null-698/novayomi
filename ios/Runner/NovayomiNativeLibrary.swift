@@ -63,6 +63,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private var sortIndex = 0
   private var gridSize = 0
   private var configuration: [String: Any] = [:]
+  private weak var categoryManager: NovayomiLibraryCategoryManager?
 
   init(frame: CGRect, identifier: Int64, messenger: FlutterBinaryMessenger,
        data: [String: Any]) {
@@ -261,6 +262,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   private func apply(_ data: [String: Any]) {
     configuration = data
+    if let all = data["allCategories"] as? [[String: Any]] {
+      categoryManager?.update(all)
+    }
     if let list = data["items"] as? [[String: Any]] {
       entries = list
       let ids = Set(list.compactMap { $0["id"] as? Int })
@@ -364,6 +368,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let manager = NovayomiLibraryCategoryManager(categories: configuration["allCategories"] as? [[String: Any]] ?? []) { [weak self] action in
       self?.channel.invokeMethod("manageCategory", arguments: action)
     }
+    categoryManager = manager
     presentSheet(manager)
   }
 
@@ -1041,4 +1046,147 @@ private final class NovayomiLibraryCategorySheet: UITableViewController {
     let values = Array(chosen)
     dismiss(animated: true) { [onConfirm] in onConfirm(values) }
   }
+}
+
+
+/// Native collection management, backed by the existing CategoryRepository.
+/// The sheet never writes Isar directly. Every operation is sent to Dart, where
+/// current persistence, timestamps and sync event rules remain authoritative.
+private final class NovayomiLibraryCategoryManager: UITableViewController {
+  private var categories: [[String: Any]]
+  private let onAction: ([String: Any]) -> Void
+
+  init(categories: [[String: Any]], onAction: @escaping ([String: Any]) -> Void) {
+    self.categories = categories
+    self.onAction = onAction
+    super.init(style: .insetGrouped)
+  }
+
+  required init?(coder: NSCoder) { fatalError("Storyboard unsupported") }
+
+  func update(_ data: [[String: Any]]) {
+    // Do not disrupt a user mid-drag. Updated Isar snapshots arrive normally.
+    if isViewLoaded && tableView.isEditing { return }
+    categories = data.sorted {
+      ($0["position"] as? Int ?? 0) < ($1["position"] as? Int ?? 0)
+    }
+    if isViewLoaded { tableView.reloadData() }
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Collections"
+    navigationItem.leftBarButtonItem = editButtonItem
+    navigationItem.rightBarButtonItems = [
+      UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(done)),
+      UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(create))
+    ]
+    tableView.allowsSelectionDuringEditing = true
+    tableView.rowHeight = 54
+    update(categories)
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    categories.count
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let c = categories[indexPath.row]
+    let cell = tableView.dequeueReusableCell(withIdentifier: "collection")
+      ?? UITableViewCell(style: .subtitle, reuseIdentifier: "collection")
+    let name = c["name"] as? String ?? "Collection"
+    let hidden = c["hidden"] as? Bool ?? false
+    let updates = c["updates"] as? Bool ?? true
+    cell.textLabel?.text = name
+    cell.textLabel?.textColor = hidden ? .secondaryLabel : .label
+    cell.detailTextLabel?.text = hidden ? "Hidden" : (updates ? nil : "Skip updates")
+    cell.accessibilityLabel = name + (hidden ? ", hidden" : "")
+    cell.accessoryType = .disclosureIndicator
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    guard categories.indices.contains(indexPath.row),
+          let id = categories[indexPath.row]["id"] as? Int else { return }
+    promptName(title: "Rename collection", current: categories[indexPath.row]["name"] as? String ?? "") {
+      [weak self] name in self?.onAction(["kind": "rename", "id": id, "name": name])
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { true }
+
+  override func tableView(_ tableView: UITableView, moveRowAt source: IndexPath, to destination: IndexPath) {
+    let item = categories.remove(at: source.row)
+    categories.insert(item, at: destination.row)
+    let ids = categories.compactMap { $0["id"] as? Int }
+    onAction(["kind": "reorder", "ids": ids])
+  }
+
+  override func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath)
+    -> UITableViewCell.EditingStyle { .none }
+
+  override func tableView(_ tableView: UITableView,
+                          trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath)
+    -> UISwipeActionsConfiguration? {
+    guard categories.indices.contains(indexPath.row),
+          let id = categories[indexPath.row]["id"] as? Int else { return nil }
+    let item = categories[indexPath.row]
+    let hidden = item["hidden"] as? Bool ?? false
+    let updates = item["updates"] as? Bool ?? true
+    let visibility = UIContextualAction(style: .normal, title: hidden ? "Show" : "Hide") {
+      [weak self] _, _, completion in
+      self?.onAction(["kind": "hide", "id": id, "value": !hidden])
+      completion(true)
+    }
+    visibility.backgroundColor = .systemBlue
+    let update = UIContextualAction(style: .normal, title: updates ? "Skip updates" : "Enable updates") {
+      [weak self] _, _, completion in
+      self?.onAction(["kind": "updates", "id": id, "value": !updates])
+      completion(true)
+    }
+    update.backgroundColor = .systemGray
+    let remove = UIContextualAction(style: .destructive, title: "Delete") {
+      [weak self] _, _, completion in
+      let confirmation = UIAlertController(title: "Delete collection?",
+        message: "Novels will stay in your Library but will lose this collection.",
+        preferredStyle: .alert)
+      confirmation.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completion(false) })
+      confirmation.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
+        self?.onAction(["kind": "delete", "id": id])
+        completion(true)
+      })
+      self?.present(confirmation, animated: true)
+    }
+    return UISwipeActionsConfiguration(actions: [remove, update, visibility])
+  }
+
+  @objc private func create() {
+    promptName(title: "New collection", current: "") { [weak self] name in
+      self?.onAction(["kind": "create", "name": name])
+    }
+  }
+
+  private func promptName(title: String, current: String, callback: @escaping (String) -> Void) {
+    let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+    alert.addTextField { input in
+      input.text = current
+      input.placeholder = "Collection name"
+      input.autocapitalizationType = .words
+      input.clearButtonMode = .whileEditing
+    }
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self, weak alert] _ in
+      let name = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      guard !name.isEmpty && name.count <= 80 else { return }
+      if self?.categories.contains(where: {
+        ($0["name"] as? String ?? "").localizedCaseInsensitiveCompare(name) == .orderedSame
+          && ($0["name"] as? String ?? "") != current
+      }) == true { return }
+      callback(name)
+    })
+    present(alert, animated: true)
+  }
+
+  @objc private func done() { dismiss(animated: true) }
 }
