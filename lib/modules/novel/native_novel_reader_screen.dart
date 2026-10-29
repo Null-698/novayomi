@@ -11,6 +11,7 @@ import 'package:mangayomi/modules/novel/novel_reader_controller_provider.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/services/get_html_content.dart';
 import 'package:mangayomi/src/rust/api/epub.dart';
+import 'package:mangayomi/utils/utils.dart';
 
 /// Data-only Flutter bridge for the full-screen UIKit / WKWebView reader.
 /// Flutter never renders iOS novel text, bars, overlays or scroll effects.
@@ -101,6 +102,16 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     );
     final novel = chapter.manga.value;
     final url = Uri.tryParse(chapter.url ?? '');
+    final source = (novel?.lang != null && novel?.source != null)
+        ? getSource(novel!.lang!, novel.source!, novel.sourceId, installedOnly: true)
+        : null;
+    final sourceUrl = Uri.tryParse(source?.baseUrl ?? '');
+    final baseURL = (url != null && (url.scheme == 'https' || url.scheme == 'http'))
+        ? url
+        : (sourceUrl != null &&
+                (sourceUrl.scheme == 'https' || sourceUrl.scheme == 'http'))
+            ? sourceUrl
+            : null;
     final chapters = novel?.chapters.toList() ?? <Chapter>[];
     final index = chapters.indexWhere((c) => c.id == chapter.id);
     final start = index < 0 ? 0 : (index - 12).clamp(0, chapters.length).toInt();
@@ -128,8 +139,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
           ? 'justify'
           : ref.read(novelTextAlignStateProvider).name,
       'fontFamily': _webkitFont(ref.read(novelFontFamilyStateProvider)),
-      if (url != null && (url.scheme == 'https' || url.scheme == 'http'))
-        'baseURL': url.toString(),
+      if (baseURL != null) 'baseURL': baseURL.toString(),
       'chapters': [
         for (final entry in chapters.sublist(start, end))
           if (entry.id != null)
