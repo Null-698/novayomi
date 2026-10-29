@@ -60,6 +60,7 @@ jobs:
             lib/modules/novel/native_novel_reader_screen.dart \
             lib/modules/novel/novel_reader_view.dart \
             lib/modules/library/native_ios_novel_library.dart \
+            lib/modules/library/widgets/library_dialogs.dart \
             lib/router/router.dart
 
       - name: Check native iOS Swift syntax
