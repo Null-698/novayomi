@@ -67,48 +67,11 @@ void showDeleteMangaDialog({
                     onPressed: !anything
                         ? null
                         : () async {
-                            // From Library
-                            if (deleteFromLib) {
-                              for (var manga in mangasList) {
-                                await mangaRepository.removeFromLibrary(manga);
-                              }
-                            }
-                            // Downloaded Chapters
-                            if (deleteDownloads) {
-                              for (var manga in mangasList) {
-                                String mangaDirectory = "";
-                                if (manga.isLocalArchive ?? false) {
-                                  // For local archives the archive file IS the chapter — there is
-                                  // nothing to re-download. So we delete the physical files and
-                                  // remove all Isar records, mirroring a full library removal.
-                                  mangaDirectory = await _deleteImport(
-                                    manga,
-                                    mangaDirectory,
-                                  );
-                                  await mangaRepository.removeFromLibrary(
-                                    manga,
-                                  );
-                                } else {
-                                  // Regular manga: delete downloaded files and their download
-                                  // records, but leave the manga and chapter metadata intact so
-                                  // the user can re-download later.
-                                  mangaDirectory = await _deleteDownload(
-                                    manga,
-                                    mangaDirectory,
-                                  );
-                                }
-                                // If the manga's base directory is now empty,
-                                // remove it too so we don't leave orphaned folders on disk.
-                                if (mangaDirectory.isNotEmpty) {
-                                  final path = Directory(mangaDirectory);
-                                  if (path.existsSync() &&
-                                      path.listSync().isEmpty) {
-                                    path.deleteSync(recursive: true);
-                                  }
-                                }
-                              }
-                            }
-
+                            await removeLibraryItemsAndDownloads(
+                              mangasList: mangasList,
+                              removeFromLibrary: deleteFromLib,
+                              deleteDownloads: deleteDownloads,
+                            );
                             ref.read(mangasListStateProvider.notifier).clear();
                             ref
                                 .read(isLongPressedStateProvider.notifier)
@@ -126,6 +89,50 @@ void showDeleteMangaDialog({
       );
     },
   );
+}
+
+/// Shared library removal operation for the Flutter dialog and native iOS
+/// confirmation sheet. This preserves the original file/Isar cleanup path:
+/// regular downloads may be deleted without removing their source entries;
+/// deleting a local EPUB removes the local source file and metadata.
+///
+/// The native interface only chooses the options; all deletion stays in
+/// the same existing Dart repositories.
+Future<void> removeLibraryItemsAndDownloads({
+  required List<Manga> mangasList,
+  required bool removeFromLibrary,
+  required bool deleteDownloads,
+}) async {
+  if (!removeFromLibrary && !deleteDownloads) return;
+  // From Library
+  if (removeFromLibrary) {
+    for (final manga in mangasList) {
+      await mangaRepository.removeFromLibrary(manga);
+    }
+  }
+  // Downloaded Chapters
+  if (deleteDownloads) {
+    for (final manga in mangasList) {
+      String mangaDirectory = "";
+      if (manga.isLocalArchive ?? false) {
+        // For local archives the archive file IS the chapter — there is
+        // nothing to re-download. Delete the actual EPUB and all Isar records.
+        mangaDirectory = await _deleteImport(manga, mangaDirectory);
+        await mangaRepository.removeFromLibrary(manga);
+      } else {
+        // Regular manga: delete download files/records, but keep chapter
+        // metadata so the user can download them again.
+        mangaDirectory = await _deleteDownload(manga, mangaDirectory);
+      }
+      // Remove the base directory only when no files remain.
+      if (mangaDirectory.isNotEmpty) {
+        final path = Directory(mangaDirectory);
+        if (path.existsSync() && path.listSync().isEmpty) {
+          path.deleteSync(recursive: true);
+        }
+      }
+    }
+  }
 }
 
 /// Deletes the physical archive files (zip/cbz/mp4/epub) for a local-archive
