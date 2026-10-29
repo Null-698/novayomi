@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mangayomi/models/manga.dart';
+import 'package:mangayomi/models/category.dart';
+import 'package:mangayomi/models/changed.dart';
 import 'package:mangayomi/models/settings.dart';
 import 'package:mangayomi/modules/library/providers/isar_providers.dart';
 import 'package:mangayomi/modules/library/providers/library_filter_provider.dart';
@@ -18,6 +21,9 @@ import 'package:mangayomi/modules/more/providers/downloaded_only_state_provider.
 import 'package:mangayomi/utils/constant.dart';
 import 'package:mangayomi/repositories/manga_repository.dart';
 import 'package:mangayomi/repositories/chapter_repository.dart';
+import 'package:mangayomi/repositories/category_repository.dart';
+import 'package:mangayomi/modules/library/providers/local_archive.dart';
+import 'package:mangayomi/modules/more/settings/sync/providers/sync_providers.dart';
 import 'package:mangayomi/modules/history/providers/isar_providers.dart';
 import 'package:mangayomi/repositories/history_repository.dart';
 import 'package:mangayomi/modules/more/providers/incognito_mode_state_provider.dart';
@@ -74,6 +80,73 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
           context: context,
           entry: selected,
         );
+      case 'random':
+        if (_allEntries.isEmpty) return;
+        final selected = _allEntries[Random().nextInt(_allEntries.length)];
+        if (mounted) {
+          await onTapEntry(
+            isLongPressed: false, ref: ref, context: context, entry: selected,
+          );
+        }
+      case 'import':
+        final split = call.arguments == true;
+        await ref.read(importArchivesFromFileProvider(
+          null, itemType: ItemType.novel, init: true, splitChapters: split,
+        ).future);
+        ref.invalidate(getAllMangaStreamProvider(
+          categoryId: null, itemType: ItemType.novel,
+        ));
+      case 'manageCategory':
+        final args = call.arguments;
+        if (args is! Map) return;
+        final kind = args['kind'] as String?;
+        final id = args['id'] as int?;
+        final name = (args['name'] as String?)?.trim();
+        if (kind == 'create' && name != null && name.isNotEmpty) {
+          final existing = categoryRepository.getByItemType(ItemType.novel);
+          if (existing.any((c) => c.name?.toLowerCase() == name.toLowerCase())) return;
+          await categoryRepository.create(Category(
+            name: name, forItemType: ItemType.novel,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+          ));
+        } else if (kind == 'reorder') {
+          final order = (args['ids'] as List?)?.whereType<int>().toList();
+          if (order == null) return;
+          final existing = categoryRepository.getByItemType(ItemType.novel);
+          final byId = {for (final c in existing) c.id: c};
+          if (order.length != existing.length ||
+              !byId.keys.toSet().containsAll(order)) return;
+          final now = DateTime.now().millisecondsSinceEpoch;
+          for (var i = 0; i < order.length; i++) {
+            byId[order[i]]!
+              ..pos = i
+              ..updatedAt = now;
+          }
+          await categoryRepository.putAll(existing);
+        } else if (id != null) {
+          final c = categoryRepository.findById(id);
+          if (c == null || c.forItemType != ItemType.novel) return;
+          switch (kind) {
+            case 'rename':
+              if (name == null || name.isEmpty) return;
+              if (categoryRepository.getByItemType(ItemType.novel).any(
+                (other) => other.id != id &&
+                  other.name?.toLowerCase() == name.toLowerCase())) return;
+              await categoryRepository.save(c..name = name);
+            case 'hide':
+              final value = args['value'] as bool?;
+              if (value != null) await categoryRepository.setHidden(c, value);
+            case 'updates':
+              final value = args['value'] as bool?;
+              if (value != null) await categoryRepository.save(c..shouldUpdate = value);
+            case 'delete':
+              await categoryRepository.remove(c);
+              await ref.read(synchingProvider(syncId: 1).notifier).addChangedPartAsync(
+                ActionType.removeCategory, c.id, '{}', true, clientId: c.clientId,
+              );
+          }
+        }
+        ref.invalidate(getMangaCategorieStreamProvider(itemType: ItemType.novel));
       case 'resumeChapter':
         final chapterId = call.arguments;
         if (chapterId is! int) return;
@@ -449,6 +522,17 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
                 : visible.reversed.toList())
             : visible))
           if (book.id != null) book.id!,
+      ],
+      'allCategories': <Map<String, Object?>>[
+        for (final c in (categories ?? []))
+          if (c.id != null)
+            <String, Object?>{
+              'id': c.id,
+              'name': c.name ?? 'Collection',
+              'position': c.pos ?? 0,
+              'hidden': c.hide ?? false,
+              'updates': c.shouldUpdate ?? true,
+            },
       ],
       'categories': <Map<String, Object?>>[
         for (final c in (categories ?? []).where((c) => c.hide != true))
