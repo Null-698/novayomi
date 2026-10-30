@@ -142,7 +142,7 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     var content = cell.defaultContentConfiguration()
     content.text = item.title
     content.image = UIImage(systemName: item.symbol)
-    content.imageProperties.tintColor = .tintColor
+    content.imageProperties.tintColor = root.tintColor
     cell.contentConfiguration = content
     if item.toggle {
       let toggle = UISwitch()
@@ -151,6 +151,7 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
       toggle.tag = item.path == "downloadedOnly" ? 0 : 1
       toggle.addTarget(self, action: #selector(toggleChanged(_:)), for: .valueChanged)
       cell.accessoryView = toggle
+      cell.accessoryType = .none
       cell.selectionStyle = .none
     } else {
       cell.accessoryView = nil
