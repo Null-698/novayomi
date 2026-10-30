@@ -13,6 +13,7 @@ import 'package:mangayomi/services/get_latest_updates.dart';
 import 'package:mangayomi/services/search.dart';
 import 'package:mangayomi/services/get_filter_list.dart';
 import 'package:mangayomi/services/get_source_baseurl.dart';
+import 'package:mangayomi/utils/headers.dart';
 
 /// Native iOS source result browser backed by the existing extension service,
 /// source filters, paging and novel detail lookup.
@@ -137,6 +138,12 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
   }
   @override
   Widget build(BuildContext context) {
+    final headers = widget.source.name == 'local' ? <String, String>{} :
+        ref.watch(headersProvider(
+          source: widget.source.name ?? '',
+          lang: widget.source.lang ?? '',
+          sourceId: widget.source.id,
+        ));
     _snapshot = <String, Object?>{
       'title': widget.source.name ?? 'Source',
       'loading': _busy,
@@ -147,6 +154,7 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
             'title': novel.name ?? 'Novel',
             'description': novel.author ?? novel.description ?? '',
             'cover': novel.imageUrl ?? '',
+            'headers': headers,
           }
       ],
     };
