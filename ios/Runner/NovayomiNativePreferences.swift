@@ -206,6 +206,36 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
         self?.send("change", ["id": id, "value": alert?.textFields?.first?.text ?? ""])
       })
       present(alert)
+    } else if type == "secret" {
+      let alert = UIAlertController(title: data["title"] as? String ?? "Set password",
+        message: "Your backup password is stored in the iOS Keychain.",
+        preferredStyle: .alert)
+      alert.addTextField { field in
+        field.placeholder = "New password"
+        field.isSecureTextEntry = true
+        field.textContentType = .newPassword
+      }
+      alert.addTextField { field in
+        field.placeholder = "Confirm new password"
+        field.isSecureTextEntry = true
+        field.textContentType = .newPassword
+      }
+      alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+      alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self, weak alert] _ in
+        guard let fields = alert?.textFields, fields.count == 2 else { return }
+        let first = fields[0].text ?? ""
+        let confirm = fields[1].text ?? ""
+        guard !first.isEmpty && first == confirm else {
+          let warning = UIAlertController(title: "Passwords do not match",
+            message: "Enter the same non-empty password twice.",
+            preferredStyle: .alert)
+          warning.addAction(UIAlertAction(title: "OK", style: .default))
+          self?.present(warning)
+          return
+        }
+        self?.send("secret", ["id": id, "value": first])
+      })
+      present(alert)
     } else if type == "credentials" {
       let alert = UIAlertController(title: data["title"] as? String ?? "Log in",
         message: "Your credentials are sent only to the existing service.",
