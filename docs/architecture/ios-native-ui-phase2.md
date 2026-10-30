@@ -88,14 +88,15 @@ tracking, source migration and advanced overflow actions.
 
 ### 2.3 — Browse, search and extension management
 
-**NATIVE ROOT AND NOVEL SOURCE RESULTS ACTIVE ON IOS:** UIKit searchable
-source list, pin/unpin, Local novels, and a native extension catalog supporting
-install/update/uninstall through the original Dart fetch and source repositories.
-Novel source-result pages now render UIKit Popular/Latest and search results,
-with pagination and native pull-to-refresh using the existing extension
-service. Advanced filters, global search, repository management and extension
-preferences remain to be ported; some still use the existing Flutter screens.
-No new backend was introduced.
+**NATIVE NOVEL BROWSE, SEARCH AND EXTENSION SCREENS ACTIVE ON IOS:**
+UIKit source and extension catalog, extension landing page, source filtering,
+extension preferences, and repository add/remove/hide/refresh. Novel source
+results present UIKit Popular/Latest and search with paginated results,
+pull-to-refresh and covered images. Global novel search also uses UIKit,
+aggregating the existing source searches with a three-request concurrency
+limit. Extension cookies and dynamically declared preferences still persist
+using the existing Dart services. Some advanced source tools, editor
+screens and cross-source migration flows remain Flutter-presented.
 
 ### 2.4 — Updates, History and Downloads
 
@@ -108,33 +109,41 @@ advanced download controls and full parity remain subject to device testing.
 
 ### 2.5 — Settings, tracking, backup and sync
 
-**NATIVE MORE AND SETTINGS ROOTS ACTIVE ON IOS:** UIKit grouped menus and
-native Downloaded Only/Incognito switches with existing Riverpod persistence.
-Native Settings includes grouped, searchable navigation. General,
-Appearance, Downloads and Browse settings have UIKit toggle/slider/choice/text
-forms writing the original Riverpod providers. Security settings use UIKit
-with a device-authentication gate for app-lock changes; DoH and proxy choices
-preserve the original network stores. The standalone Novel Reader settings
-route now uses the same native UIKit form architecture, covering themes,
-typography, reading modes, general reading behavior and TTS speed/pitch.
-Advanced reader controls and TTS voice discovery, tracking, sync,
-backup/restore, repository configuration and some advanced settings are
-not yet feature-complete native screens. Keep their account, restore
-and file-handling logic intact; do not change backup formats.
+**NATIVE MORE, SETTINGS, TRACKING, SYNC AND STORAGE ROOTS ACTIVE ON IOS:**
+UIKit grouped menus and the Downloaded Only/Incognito switches continue
+to write the existing settings. General, Appearance, Downloads, Browse,
+Security and Novel Reader preferences use native UIKit form controls,
+preserving the original Riverpod persistence, app-lock authentication,
+DoH/proxy settings and TTS service. Tracking, connected tracker management
+and synchronization have native UIKit routes with original OAuth, credential
+and sync backends. Data & Storage and Create Backup are also UIKit screens;
+backup creation still uses the original archive provider and iOS backup
+directory, with password storage in the Keychain. **The restore workflow
+still opens its original Flutter confirmation/import dialogs** so that
+cross-format validation, merge/replace, safety snapshots and rollback are not
+lost. Tracker details, advanced library/source maintenance, backup
+restore dialogs, and additional service forms need native parity work.
+Neither account formats nor backup formats are changed.
 
 ### 2.6 — iOS shell cutover and cleanup
 
-**PARTIALLY COMPLETE — NOT YET 100% NATIVE.** UIKit owns the default iOS
-Novel Library, novel details, Browse, novel source results, Activity,
-More, Download Queue, Settings navigation, and common preference forms.
-There are no preview switches. Remaining Flutter-visible routes include
-advanced extension configuration and repositories, global search, tracking,
-sync, backup/restore, some advanced reader controls and secondary forms/actions. Convert these with full parity before deleting the
-old Flutter UI or claiming a fully native interface.
+**PARTIALLY COMPLETE — NOT YET 100% NATIVE.** UIKit owns the
+default iOS Novel Library, novel details, reader, Browse, extension catalog,
+source filters/results, global search, repository management, dynamic
+extension preferences, Activity, More, Download Queue, Settings, tracking,
+sync and backup creation/storage forms. **There are no preview switches.**
+Remaining Flutter-visible routes include tracker details, chapter migration,
+some advanced extension/source editors, stats and calendar, library cleanup,
+backup restoration's interactive safeguards, and other secondary flows.
+Do not remove the old Flutter UI or claim the shell is 100% native until
+these are converted and passed functional parity checks.
 
-This phase also requires a successful fresh iOS build of the current commit,
-on-device acceptance, VoiceOver and Dynamic Type checks, orientation testing
-and testing long source/chapter lists. Swift remains presentation-only:
+The new Ubuntu native UI smoke workflow analyzes all iOS bridge Dart files,
+parses Swift files and checks route/Xcode registration automatically on pushes.
+It does not replace a full iOS unsigned IPA build, Swift UIKit typechecking
+against the iOS SDK, or on-device testing. Full cutover additionally requires
+VoiceOver and Dynamic Type checks, orientation testing, and long
+source/chapter list and gesture validation. Swift remains presentation-only:
 Flutter/Dart/Rust retain the backend and business logic.
 
 ## Verification gates for every screen
