@@ -307,7 +307,10 @@ class RouterNotifier extends ChangeNotifier {
           ? const NativeIosPreferencesScreen(section: 'downloads')
           : const DownloadsScreen()),
     _genericRoute(name: "dataAndStorage", child: const DataAndStorage()),
-    _genericRoute(name: "security", child: const SecurityScreen()),
+    _genericRoute(name: "security",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'security')
+          : const SecurityScreen()),
     _genericRoute(name: "manageTrackers", child: const ManageTrackersScreen()),
     _genericRoute<TrackPreference>(
       name: "trackingDetail",
