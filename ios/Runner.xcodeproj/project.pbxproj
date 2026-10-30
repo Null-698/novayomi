@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C12A30060000000000000001 /* NovayomiNativeDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30060000000000000002 /* NovayomiNativeDownloads.swift */; };
 		C12A30050000000000000001 /* NovayomiNativeActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30050000000000000002 /* NovayomiNativeActivity.swift */; };
 		C12A30040000000000000001 /* NovayomiNativeBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30040000000000000002 /* NovayomiNativeBrowse.swift */; };
 		C12A30030000000000000001 /* NovayomiNativeMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30030000000000000002 /* NovayomiNativeMore.swift */; };
@@ -38,6 +39,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C12A30060000000000000002 /* NovayomiNativeDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeDownloads.swift; sourceTree = "<group>"; };
 		C12A30050000000000000002 /* NovayomiNativeActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeActivity.swift; sourceTree = "<group>"; };
 		C12A30040000000000000002 /* NovayomiNativeBrowse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeBrowse.swift; sourceTree = "<group>"; };
 		C12A30030000000000000002 /* NovayomiNativeMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeMore.swift; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				C12A30030000000000000002 /* NovayomiNativeMore.swift */,
 				C12A30040000000000000002 /* NovayomiNativeBrowse.swift */,
 				C12A30050000000000000002 /* NovayomiNativeActivity.swift */,
+				C12A30060000000000000002 /* NovayomiNativeDownloads.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -416,6 +419,7 @@
 				C12A30030000000000000001 /* NovayomiNativeMore.swift in Sources */,
 				C12A30040000000000000001 /* NovayomiNativeBrowse.swift in Sources */,
 				C12A30050000000000000001 /* NovayomiNativeActivity.swift in Sources */,
+				C12A30060000000000000001 /* NovayomiNativeDownloads.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

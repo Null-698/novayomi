@@ -76,6 +76,12 @@ import UniformTypeIdentifiers
         withId: "novayomi/native-activity"
       )
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NovayomiNativeDownloadsView") {
+      registrar.register(
+        NovayomiNativeDownloadsFactory(messenger: registrar.messenger()),
+        withId: "novayomi/native-downloads"
+      )
+    }
 
     let readerChannel = FlutterMethodChannel(
       name: "novayomi/native-reader",

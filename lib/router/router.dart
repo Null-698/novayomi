@@ -54,6 +54,7 @@ import 'package:mangayomi/modules/more/about/about_screen.dart';
 import 'package:mangayomi/modules/more/about/error_reports_screen.dart';
 import 'package:mangayomi/modules/more/about/licenses_screen.dart';
 import 'package:mangayomi/modules/more/download_queue/download_queue_screen.dart';
+import 'package:mangayomi/modules/more/download_queue/native_ios_download_queue.dart';
 import 'package:mangayomi/modules/more/more_screen.dart';
 import 'package:mangayomi/modules/more/native_ios_more_screen.dart';
 import 'package:mangayomi/modules/more/settings/appearance/appearance_screen.dart';
@@ -261,7 +262,9 @@ class RouterNotifier extends ChangeNotifier {
       name: "sourceFilter",
       builder: (itemType) => SourcesFilterScreen(itemType: itemType),
     ),
-    _genericRoute(name: "downloadQueue", child: const DownloadQueueScreen()),
+    _genericRoute(name: "downloadQueue",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosDownloadQueue() : const DownloadQueueScreen()),
     _genericRoute<Map<String, dynamic>>(
       name: "mangawebview",
       builder: (data) => MangaWebView(url: data["url"]!, title: data['title']!),
