@@ -99,8 +99,10 @@ class _NativeIosGlobalSearchState extends ConsumerState<NativeIosGlobalSearch> {
   }
 
   Future<void> _refresh() async {
-    if (_loading) return;
+    // Invalidate earlier source requests when the query changes, rather than
+    // losing the new query while the previous search is still fetching.
     _generation++;
+    _loading = false;
     _results.clear();
     _lastPages.clear();
     _hasMore.clear();
@@ -160,8 +162,10 @@ class _NativeIosGlobalSearchState extends ConsumerState<NativeIosGlobalSearch> {
             'Unable to search sources: ' + (lastError ?? 'Unknown error'));
       }
     } finally {
-      _loading = false;
-      if (mounted && serial == _generation) setState(() {});
+      if (mounted && serial == _generation) {
+        _loading = false;
+        setState(() {});
+      }
     }
   }
 
