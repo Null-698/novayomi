@@ -46,6 +46,7 @@ import 'package:mangayomi/modules/history/history_screen.dart';
 import 'package:mangayomi/modules/library/library_screen.dart';
 import 'package:mangayomi/modules/library/native_ios_novel_library.dart';
 import 'package:mangayomi/modules/manga/detail/manga_detail_main.dart';
+import 'package:mangayomi/modules/manga/detail/native_ios_novel_detail.dart';
 import 'package:mangayomi/modules/manga/home/manga_home_screen.dart';
 import 'package:mangayomi/modules/more/about/about_screen.dart';
 import 'package:mangayomi/modules/more/about/error_reports_screen.dart';
@@ -217,7 +218,9 @@ class RouterNotifier extends ChangeNotifier {
     ),
     _genericRoute<int>(
       path: "/manga-reader/detail",
-      builder: (id) => MangaReaderDetail(mangaId: id),
+      builder: (id) => defaultTargetPlatform == TargetPlatform.iOS
+          ? NativeIosNovelDetail(mangaId: id)
+          : MangaReaderDetail(mangaId: id),
     ),
     _genericRoute<int>(
       name: "novelReaderView",
