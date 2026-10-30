@@ -289,7 +289,10 @@ class RouterNotifier extends ChangeNotifier {
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosPreferencesScreen(section: 'general')
           : const GeneralScreen()),
-    _genericRoute(name: "novelReaderMode", child: const NovelReaderScreen()),
+    _genericRoute(name: "novelReaderMode",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'novelReaderMode')
+          : const NovelReaderScreen()),
     _genericRoute(name: "browseS",
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosPreferencesScreen(section: 'browseS')
