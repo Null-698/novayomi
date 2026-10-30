@@ -28,6 +28,8 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   private let segments = UISegmentedControl(items: ["Sources", "Extensions"])
   private let table = UITableView(frame: .zero, style: .insetGrouped)
   private var allSources: [[String: Any]] = []
+  private var allExtensions: [[String: Any]] = []
+  private var filteredExtensions: [[String: Any]] = []
   private var filtered: [[String: Any]] = []
   private var text = ""
   private let extensionActions: [(String, String, String)] = [
@@ -96,6 +98,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
 
   private func apply(_ data: [String: Any]) {
     allSources = data["sources"] as? [[String: Any]] ?? []
+    allExtensions = data["extensions"] as? [[String: Any]] ?? []
     filter()
   }
   private func filter() {
@@ -109,6 +112,18 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       let lhs = a["pinned"] as? Bool ?? false
       let rhs = b["pinned"] as? Bool ?? false
       if lhs != rhs { return lhs }
+      return (a["name"] as? String ?? "").localizedCompare(
+        b["name"] as? String ?? "") == .orderedAscending
+    }
+    filteredExtensions = allExtensions.filter { item in
+      trimmed.isEmpty ||
+      (item["name"] as? String ?? "").localizedCaseInsensitiveContains(trimmed) ||
+      (item["lang"] as? String ?? "").localizedCaseInsensitiveContains(trimmed)
+    }
+    filteredExtensions.sort { a, b in
+      let ai = a["installed"] as? Bool ?? false
+      let bi = b["installed"] as? Bool ?? false
+      if ai != bi { return ai }
       return (a["name"] as? String ?? "").localizedCompare(
         b["name"] as? String ?? "") == .orderedAscending
     }
@@ -129,7 +144,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   func numberOfSections(in tableView: UITableView) -> Int { 1 }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     if segments.selectedSegmentIndex == 1 {
-      return extensionActions.filter { text.isEmpty ||
+      return filteredExtensions.count + extensionActions.filter { text.isEmpty ||
         $0.0.localizedCaseInsensitiveContains(text) }.count
     }
     // Local imports always remain visible without a remotely installed source.
@@ -142,12 +157,23 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     let subtitle: String
     let symbol: String
     if segments.selectedSegmentIndex == 1 {
-      let actions = extensionActions.filter { text.isEmpty ||
-        $0.0.localizedCaseInsensitiveContains(text) }
-      let action = actions[indexPath.row]
-      label = action.0
-      subtitle = "Manage existing source extensions"
-      symbol = action.1
+      if indexPath.row < filteredExtensions.count {
+        let item = filteredExtensions[indexPath.row]
+        label = item["name"] as? String ?? "Extension"
+        let installed = item["installed"] as? Bool ?? false
+        let updated = item["updateAvailable"] as? Bool ?? false
+        subtitle = (item["lang"] as? String ?? "") + " · " +
+          (updated ? "Update available" : installed ? "Installed" : "Not installed")
+        symbol = updated ? "arrow.down.circle" :
+          installed ? "checkmark.seal" : "puzzlepiece.extension"
+      } else {
+        let actions = extensionActions.filter { text.isEmpty ||
+          $0.0.localizedCaseInsensitiveContains(text) }
+        let action = actions[indexPath.row - filteredExtensions.count]
+        label = action.0
+        subtitle = "Manage source extensions"
+        symbol = action.1
+      }
     } else if indexPath.row == filtered.count {
       label = "Local novels"
       subtitle = "Read imported EPUBs"
@@ -164,15 +190,48 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     content.image = UIImage(systemName: symbol)
     content.imageProperties.tintColor = root.tintColor
     cell.contentConfiguration = content
+    cell.accessoryView = nil
     cell.accessoryType = .disclosureIndicator
+    if segments.selectedSegmentIndex == 1 && indexPath.row < filteredExtensions.count,
+       let id = filteredExtensions[indexPath.row]["id"] as? Int {
+      let item = filteredExtensions[indexPath.row]
+      let installed = item["installed"] as? Bool ?? false
+      let action = UIButton(type: .system)
+      action.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+      action.accessibilityLabel = "Extension actions"
+      action.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+      action.showsMenuAsPrimaryAction = true
+      action.menu = UIMenu(children: [
+        UIAction(title: installed ? "Settings" : "Install",
+                 image: UIImage(systemName: installed ? "gearshape" : "arrow.down.circle")) {
+          [weak self] _ in
+          self?.channel.invokeMethod(installed ? "openExtension" : "updateExtension", arguments: id)
+        },
+        UIAction(title: "Install / Update", image: UIImage(systemName: "arrow.clockwise")) {
+          [weak self] _ in self?.channel.invokeMethod("updateExtension", arguments: id)
+        },
+        UIAction(title: "Uninstall", image: UIImage(systemName: "trash"), attributes: installed ? [.destructive] : [.disabled]) {
+          [weak self] _ in self?.confirmUninstall(id: id)
+        }
+      ])
+      cell.accessoryView = action
+      cell.accessoryType = .none
+    }
     return cell
   }
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
     if segments.selectedSegmentIndex == 1 {
-      let options = extensionActions.filter { text.isEmpty ||
-        $0.0.localizedCaseInsensitiveContains(text) }
-      channel.invokeMethod("action", arguments: options[indexPath.row].2)
+      if indexPath.row < filteredExtensions.count {
+        let ext = filteredExtensions[indexPath.row]
+        guard let id = ext["id"] as? Int else { return }
+        let installed = ext["installed"] as? Bool ?? false
+        channel.invokeMethod(installed ? "openExtension" : "updateExtension", arguments: id)
+      } else {
+        let options = extensionActions.filter { text.isEmpty ||
+          $0.0.localizedCaseInsensitiveContains(text) }
+        channel.invokeMethod("action", arguments: options[indexPath.row - filteredExtensions.count].2)
+      }
       return
     }
     if indexPath.row == filtered.count {
@@ -183,6 +242,19 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       channel.invokeMethod("openSource", arguments: id)
     }
   }
+  private func confirmUninstall(id: Int) {
+    let alert = UIAlertController(title: "Uninstall extension?",
+      message: "This removes its executable source. Your novels remain in the Library.",
+      preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Uninstall", style: .destructive) { [weak self] _ in
+      self?.channel.invokeMethod("uninstallExtension", arguments: id)
+    })
+    guard var host = root.window?.rootViewController else { return }
+    while let next = host.presentedViewController { host = next }
+    host.present(alert, animated: true)
+  }
+
   func tableView(_ tableView: UITableView,
     trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
     guard segments.selectedSegmentIndex == 0, indexPath.row < filtered.count,
