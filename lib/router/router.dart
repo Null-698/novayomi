@@ -253,7 +253,10 @@ class RouterNotifier extends ChangeNotifier {
     ),
     _genericRoute<ItemType>(
       name: "ExtensionLang",
-      builder: (itemType) => ExtensionsLang(itemType: itemType),
+      builder: (itemType) => defaultTargetPlatform == TargetPlatform.iOS &&
+              itemType == ItemType.novel
+          ? const NativeIosBrowseScreen(initialSegment: 1)
+          : ExtensionsLang(itemType: itemType),
     ),
     _genericRoute(name: "settings",
       child: defaultTargetPlatform == TargetPlatform.iOS
