@@ -57,7 +57,8 @@ class _NativeIosActivityScreenState extends ConsumerState<NativeIosActivityScree
           final id = call.arguments as int?;
           if (id == null) return;
           final chapter = chapterRepository.findByIdSync(id);
-          if (chapter == null || chapter.manga.value?.itemType != ItemType.novel ||
+          if (chapter == null || chapter.mangaId == null ||
+              mangaRepository.findById(chapter.mangaId!)?.itemType != ItemType.novel ||
               downloadRepository.getByChapterId(id)?.isDownload == true) return;
           await downloadRepository.enqueue(chapter);
           ref.invalidate(processDownloadsProvider());
