@@ -31,7 +31,7 @@ and unsigned IPA builds ship the native Library without special inputs.
 The backend continues to run in Dart, as before. Test the native interface
 on a device before treating its remaining UI migration stages as complete.
 
-Implemented in the staged native Library:
+Implemented in the active native Library:
 - UICollectionView grid and list, system search field and category chips.
 - Native Filter / Sort / Display sheet using the current persisted providers,
   including source filters, reverse unread-count sorting and grid columns.
@@ -64,8 +64,11 @@ Implemented in the staged native Library:
 - Native empty and no-results states, with Browse and clear-filter actions.
 
 **Still required before the default route can switch:**
-- Verify and polish display-style parity across all supported device sizes;
-  refine the shelf to scroll naturally with the library like Flutter.
+- Verify display-style parity across all supported device sizes.
+- Continue Reading is now a non-sticky UICollectionView section header,
+  not a fixed second collection above the scrolling grid. For libraries with
+  just one or two novels, bottom scroll space is reserved so the entire
+  shelf can scroll off the screen on an iPhone. Validate on device.
 - Ensure the native migration workflow matches any available original
   source-migration actions before exposing it.
 - iOS build, real-device performance, VoiceOver and large-type testing.
@@ -74,24 +77,39 @@ Do not promote the preview until these gates pass.
 
 ### 2.2 — Native novel details
 
-Implement details, chapter lists, track status and download controls as
-native UIKit views. Reuse existing providers and navigation into the native
-reader. Retain Isar and source extension operations in Dart.
+**ACTIVE ON IOS:** `NativeIosNovelDetail` presents the native UIKit novel
+information card, chapter search/list, read/resume, mark read/unread, bookmarks,
+favorite, download chapter/all unread, refresh and sorting. It is the default
+iOS novel-detail route without any preview switch. Other media retain their
+original detail views. The original Isar, updater and download providers remain
+the only backend. Remaining parity work: full chapter filters, categories,
+tracking, source migration and advanced overflow actions.
 
 ### 2.3 — Browse, search and extension management
 
-Native search, repositories, source filters and extensions UI. Keep the
-original extension installation and execution services.
+**NATIVE BROWSE ROOT ACTIVE ON IOS:** UIKit searchable list of added sources,
+pin/unpin, Local novels and native extension-navigation actions. Extension
+installation, repositories, source result browsing, global search and source
+configuration are still served by the original Dart screens until their
+native replacements reach functional parity. The backend remains unchanged.
 
 ### 2.4 — Updates, History and Downloads
 
-Native lists, sheets and progress indicators fed by existing streams.
-Keep the download queue, updater and history repositories unchanged.
+**NATIVE ROOT SCREENS ACTIVE ON IOS:** a UIKit Activity screen displays novel
+History and Updates from their original Isar streams, with read, download,
+remove/clear and refresh actions. The separate Download Queue route is UIKit,
+with resume/cancel/series cancellation handled by the existing download
+manager. Native navigation is the default, without a preview flag. More
+advanced download controls and full parity remain subject to device testing.
 
 ### 2.5 — Settings, tracking, backup and sync
 
-Native forms with real system controls. Write existing settings through
-current providers and preserve account and backup formats.
+**NATIVE MORE AND SETTINGS ROOTS ACTIVE ON IOS:** UIKit grouped menus and
+native Downloaded Only/Incognito switches with existing Riverpod persistence.
+Native Settings includes grouped, searchable settings navigation. Destination
+forms for general preferences, appearance, download configuration, tracking,
+backup and sync still render their existing Flutter UI; migrate each form
+without replacing its Dart service or changing backup formats.
 
 ### 2.6 — iOS shell cutover and cleanup
 
