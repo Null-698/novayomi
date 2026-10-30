@@ -263,6 +263,67 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
     final groups = <Map<String, Object?>>[];
     String title;
     switch (widget.section) {
+      case 'novelReaderMode':
+        title = 'Novel Reader';
+        final background = ref.watch(novelReaderThemeStateProvider);
+        final foreground = ref.watch(novelReaderTextColorStateProvider);
+        final font = ref.watch(novelFontFamilyStateProvider) ?? 'default';
+        final theme = switch (background.toUpperCase()) {
+          '#FFFFFF' => 'light',
+          '#000000' => 'black',
+          '#F5E6D3' => 'sepia',
+          _ => 'dark',
+        };
+        groups.add(group('Reader · Theme & Typography', [
+          item('novelTheme', 'Theme', theme, type: 'choice', display: theme,
+            choices: [choice('dark', 'Dark'), choice('light', 'Light'),
+              choice('black', 'Black'), choice('sepia', 'Sepia')]),
+          item('novelBackground', 'Background · hex', background, type: 'text'),
+          item('novelForeground', 'Text color · hex', foreground, type: 'text'),
+          item('novelFontSize', 'Font size', ref.watch(novelFontSizeStateProvider),
+            type: 'slider', min: 8, max: 36, step: 1),
+          item('novelPadding', 'Side padding', ref.watch(novelReaderPaddingStateProvider),
+            type: 'slider', min: 0, max: 56, step: 1),
+          item('novelLineHeight', 'Line height',
+            ref.watch(novelReaderLineHeightStateProvider),
+            type: 'slider', min: 1.0, max: 3.0, step: 0.1),
+          item('novelFontFamily', 'Font family', font, type: 'choice',
+            display: novelReaderFontOptions.where((f) => (f.key ?? 'default') == font)
+                .map((f) => f.label).firstOrNull ?? font,
+            choices: [for (final option in novelReaderFontOptions)
+              choice(option.key ?? 'default', option.label)]),
+          item('novelAlign', 'Text alignment',
+            ref.watch(novelTextAlignStateProvider).name,
+            type: 'choice', display: ref.watch(novelTextAlignStateProvider).name,
+            choices: [for (final align in NovelTextAlign.values)
+              choice(align.name, align.name)]),
+          item('novelMode', 'Reading mode',
+            ref.watch(defaultReadingModeStateProvider).name,
+            type: 'choice', display: ref.watch(defaultReadingModeStateProvider).name,
+            choices: [for (final mode in ReaderMode.values)
+              choice(mode.name, mode.name)]),
+        ]));
+        groups.add(group('General', [
+          item('keepScreen', 'Keep screen awake', ref.watch(keepScreenOnReaderStateProvider)),
+          item('scrollPercentage', 'Show scroll percentage',
+            ref.watch(novelShowScrollPercentageStateProvider)),
+          item('removeSpacing', 'Remove extra paragraph spacing',
+            ref.watch(novelRemoveExtraParagraphSpacingStateProvider)),
+          item('tapScroll', 'Tap to scroll', ref.watch(novelTapToScrollStateProvider)),
+          item('volumePaging', 'Volume button page turning',
+            ref.watch(volumeKeysPagingStateProvider)),
+          if (ref.watch(volumeKeysPagingStateProvider))
+            item('volumeInvert', 'Invert volume buttons',
+              ref.watch(volumeKeysInvertedStateProvider)),
+        ]));
+        groups.add(group('Text-to-Speech', [
+          item('ttsRate', 'Speech rate', ref.watch(ttsSpeechRateStateProvider),
+            type: 'slider', min: 0.1, max: 1.0, step: 0.1),
+          item('ttsPitch', 'Voice pitch', ref.watch(ttsPitchStateProvider),
+            type: 'slider', min: 0.5, max: 2.0, step: 0.1),
+          item('ttsLanguage', 'Language code (blank = system)',
+            ref.watch(ttsLanguageStateProvider) ?? '', type: 'text'),
+        ]));
       case 'security':
         title = 'Security';
         final locked = ref.watch(appLockEnabledStateProvider);
