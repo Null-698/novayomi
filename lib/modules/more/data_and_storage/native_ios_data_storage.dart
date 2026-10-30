@@ -88,10 +88,14 @@ class _NativeIosDataStorageState extends ConsumerState<NativeIosDataStorage> {
             final index = int.tryParse(id.substring(5));
             if (index == null) return;
             final options = ref.read(backupFrequencyOptionsStateProvider);
+            final selected = <int>{...options};
+            if (value == true) {
+              selected.add(index);
+            } else {
+              selected.remove(index);
+            }
             ref.read(backupFrequencyOptionsStateProvider.notifier)
-                .set(value == true
-                    ? {...options, index}.toList()..sort()
-                    : options.where((e) => e != index).toList());
+                .set(selected.toList()..sort());
           } else if (id == 'backupFrequency') {
             final freq = int.tryParse(value.toString());
             if (freq != null && freq >= 0 && freq <= 5) {

@@ -71,14 +71,14 @@ class _NativeIosExtensionDetailState extends ConsumerState<NativeIosExtensionDet
         case 'navigate':
           final path = call.arguments as String?;
           if (path == '/codeEditor') {
-            final result = await context.push(path, extra: source.id);
+            final result = await context.push('/codeEditor', extra: source.id);
             if (result is Source) {
               source = result;
               reloadPreferences();
               if (mounted) setState(() {});
             }
           } else if (path == '/createExtension') {
-            final result = await context.push(path, extra: source);
+            final result = await context.push('/createExtension', extra: source);
             if (result is Source) {
               source = result;
               reloadPreferences();
