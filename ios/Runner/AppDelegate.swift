@@ -70,6 +70,12 @@ import UniformTypeIdentifiers
         withId: "novayomi/native-browse"
       )
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NovayomiNativeActivityView") {
+      registrar.register(
+        NovayomiNativeActivityFactory(messenger: registrar.messenger()),
+        withId: "novayomi/native-activity"
+      )
+    }
 
     let readerChannel = FlutterMethodChannel(
       name: "novayomi/native-reader",

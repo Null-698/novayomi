@@ -44,6 +44,7 @@ import 'package:mangayomi/modules/browse/extension/extension_lang.dart';
 import 'package:mangayomi/modules/browse/global_search/global_search_screen.dart';
 import 'package:mangayomi/modules/main_view/main_screen.dart';
 import 'package:mangayomi/modules/history/history_screen.dart';
+import 'package:mangayomi/modules/history/native_ios_activity_screen.dart';
 import 'package:mangayomi/modules/library/library_screen.dart';
 import 'package:mangayomi/modules/library/native_ios_novel_library.dart';
 import 'package:mangayomi/modules/manga/detail/manga_detail_main.dart';
@@ -208,8 +209,12 @@ class RouterNotifier extends ChangeNotifier {
             builder: (id) => TrackerLibraryScreen(presetInput: id),
           ),
         ),
-        _branch(_genericRoute(name: "history", child: const HistoryScreen())),
-        _branch(_genericRoute(name: "updates", child: const UpdatesScreen())),
+        _branch(_genericRoute(name: "history",
+          child: defaultTargetPlatform == TargetPlatform.iOS
+              ? const NativeIosActivityScreen(initialTab: 1) : const HistoryScreen())),
+        _branch(_genericRoute(name: "updates",
+          child: defaultTargetPlatform == TargetPlatform.iOS
+              ? const NativeIosActivityScreen(initialTab: 0) : const UpdatesScreen())),
         _branch(_genericRoute(name: "browse",
           child: defaultTargetPlatform == TargetPlatform.iOS
               ? const NativeIosBrowseScreen() : const BrowseScreen())),

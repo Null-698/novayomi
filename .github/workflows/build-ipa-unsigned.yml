@@ -58,6 +58,7 @@ jobs:
             lib/modules/manga/detail/native_ios_novel_detail.dart \
             lib/modules/more/native_ios_more_screen.dart \
             lib/modules/browse/native_ios_browse_screen.dart \
+            lib/modules/history/native_ios_activity_screen.dart \
             lib/modules/library/widgets/library_dialogs.dart \
             lib/router/router.dart
 
@@ -68,6 +69,7 @@ jobs:
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeNovelDetail.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeMore.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeBrowse.swift
+          xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeActivity.swift
 
       - name: Build unsigned iOS IPA
         env:
