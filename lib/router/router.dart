@@ -15,6 +15,7 @@ import 'package:mangayomi/models/track_search.dart';
 import 'package:mangayomi/services/discovery/media_lookup_context.dart';
 import 'package:mangayomi/modules/browse/extension/edit_code.dart';
 import 'package:mangayomi/modules/browse/extension/extension_detail.dart';
+import 'package:mangayomi/modules/browse/extension/native_ios_extension_detail.dart';
 import 'package:mangayomi/modules/browse/extension/widgets/create_extension.dart';
 import 'package:mangayomi/modules/browse/sources/sources_filter_screen.dart';
 import 'package:mangayomi/modules/calendar/calendar_screen.dart';
@@ -262,7 +263,10 @@ class RouterNotifier extends ChangeNotifier {
           : const AppearanceScreen()),
     _genericRoute<Source>(
       name: "extension_detail",
-      builder: (source) => ExtensionDetail(source: source),
+      builder: (source) => defaultTargetPlatform == TargetPlatform.iOS &&
+              source.itemType == ItemType.novel
+          ? NativeIosExtensionDetail(source: source)
+          : ExtensionDetail(source: source),
     ),
     _genericRoute<(String?, ItemType)>(
       name: "globalSearch",
