@@ -112,11 +112,14 @@ advanced download controls and full parity remain subject to device testing.
 native Downloaded Only/Incognito switches with existing Riverpod persistence.
 Native Settings includes grouped, searchable navigation. General,
 Appearance, Downloads and Browse settings have UIKit toggle/slider/choice/text
-forms writing the original Riverpod providers. Security settings also use UIKit
+forms writing the original Riverpod providers. Security settings use UIKit
 with a device-authentication gate for app-lock changes; DoH and proxy choices
-preserve the original network stores. Deep novel-reader settings, tracking,
-sync, backup/restore, collection configuration and some advanced settings are
-not yet feature-complete native screens. Keep their existing account, restore
+preserve the original network stores. The standalone Novel Reader settings
+route now uses the same native UIKit form architecture, covering themes,
+typography, reading modes, general reading behavior and TTS speed/pitch.
+Advanced reader controls and TTS voice discovery, tracking, sync,
+backup/restore, repository configuration and some advanced settings are
+not yet feature-complete native screens. Keep their account, restore
 and file-handling logic intact; do not change backup formats.
 
 ### 2.6 — iOS shell cutover and cleanup
@@ -126,8 +129,7 @@ Novel Library, novel details, Browse, novel source results, Activity,
 More, Download Queue, Settings navigation, and common preference forms.
 There are no preview switches. Remaining Flutter-visible routes include
 advanced extension configuration and repositories, global search, tracking,
-sync, backup/restore, the standalone reader-settings page, and some
-secondary forms/actions. Convert these with full parity before deleting the
+sync, backup/restore, some advanced reader controls and secondary forms/actions. Convert these with full parity before deleting the
 old Flutter UI or claiming a fully native interface.
 
 This phase also requires a successful fresh iOS build of the current commit,
