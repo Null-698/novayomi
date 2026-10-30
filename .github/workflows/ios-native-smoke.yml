@@ -1,0 +1,80 @@
+name: Native iOS UI smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**/*.dart'
+      - 'ios/Runner/**/*.swift'
+      - 'ios/Runner.xcodeproj/project.pbxproj'
+      - '.github/workflows/ios-native-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  native-ui-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze iOS native-platform bridges
+        run: |
+          flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
+            lib/modules/novel/native_novel_reader_screen.dart \
+            lib/modules/library/native_ios_novel_library.dart \
+            lib/modules/manga/detail/native_ios_novel_detail.dart \
+            lib/modules/more/native_ios_more_screen.dart \
+            lib/modules/browse/native_ios_browse_screen.dart \
+            lib/modules/history/native_ios_activity_screen.dart \
+            lib/modules/more/download_queue/native_ios_download_queue.dart \
+            lib/modules/more/settings/native_ios_settings_screen.dart \
+            lib/modules/more/settings/native_ios_preferences_screen.dart \
+            lib/modules/more/settings/native_ios_service_settings.dart \
+            lib/modules/more/settings/browse/native_ios_source_repositories.dart \
+            lib/modules/more/settings/track/manage_trackers/native_ios_manage_trackers.dart \
+            lib/modules/more/data_and_storage/native_ios_data_storage.dart \
+            lib/modules/manga/home/native_ios_source_results.dart \
+            lib/modules/browse/global_search/native_ios_global_search.dart \
+            lib/modules/browse/extension/native_ios_extension_detail.dart \
+            lib/modules/browse/sources/native_ios_source_filter.dart \
+            lib/router/router.dart
+      - name: Parse all native Swift views
+        run: |
+          for file in ios/Runner/NovayomiNative*.swift; do
+            swiftc -frontend -parse "$file"
+          done
+      - name: Check patch whitespace
+        run: git diff --check HEAD~1 HEAD
+      - name: Verify default routes and platform-view registration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          router = Path('lib/router/router.dart').read_text()
+          app = Path('ios/Runner/AppDelegate.swift').read_text()
+          project = Path('ios/Runner.xcodeproj/project.pbxproj').read_text()
+          assert 'NATIVE_LIBRARY_PREVIEW' not in router
+          for name in [
+              'NativeIosNovelLibrary', 'NativeIosNovelDetail',
+              'NativeIosBrowseScreen', 'NativeIosActivityScreen',
+              'NativeIosMoreScreen', 'NativeIosSettingsScreen',
+              'NativeIosPreferencesScreen', 'NativeIosServiceSettings',
+              'NativeIosGlobalSearch', 'NativeIosDataStorage',
+              'NativeIosExtensionDetail', 'NativeIosSourceFilter',
+          ]:
+              assert name in router, f"Unwired route: {name}"
+          for suffix in [
+              'native-library', 'native-novel-detail', 'native-more',
+              'native-browse', 'native-activity', 'native-downloads',
+              'native-settings', 'native-preferences', 'native-source-results',
+          ]:
+              assert f'withId: "novayomi/{suffix}"' in app, suffix
+          for path in Path('ios/Runner').glob('NovayomiNative*.swift'):
+              assert f'{path.name} in Sources' in project, path.name
+          print('All native route and Xcode registrations present.')
+          PY
