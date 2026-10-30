@@ -109,6 +109,16 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
       ?? UITableViewCell(style: .subtitle, reuseIdentifier: "preference")
     let kind = data["type"] as? String ?? "link"
     let id = data["id"] as? String ?? ""
+    if kind == "slider" {
+      let sliderCell = tableView.dequeueReusableCell(
+        withIdentifier: "native-slider"
+      ) as? NovayomiPreferenceSliderCell
+        ?? NovayomiPreferenceSliderCell(style: .default, reuseIdentifier: "native-slider")
+      sliderCell.configure(data: data) { [weak self] number in
+        self?.send("change", ["id": id, "value": number])
+      }
+      return sliderCell
+    }
     let destructive = data["destructive"] as? Bool ?? false
     var content = cell.defaultContentConfiguration()
     content.text = data["title"] as? String ?? id
@@ -132,41 +142,6 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
         self?.send("change", ["id": id, "value": toggle.isOn])
       }, for: .valueChanged)
       cell.accessoryView = toggle
-    } else if kind == "slider" {
-      let minValue = Float((data["min"] as? NSNumber)?.doubleValue ?? 0)
-      let maxValue = Float((data["max"] as? NSNumber)?.doubleValue ?? 10)
-      let current = Float((data["value"] as? NSNumber)?.doubleValue ?? 0)
-      let step = Float((data["step"] as? NSNumber)?.doubleValue ?? 1)
-      let holder = UIStackView()
-      holder.axis = .horizontal
-      holder.alignment = .center
-      holder.spacing = 5
-      let label = UILabel()
-      label.text = String(format: step < 1 ? "%.2f" : "%.0f", current)
-      label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-      label.textColor = .secondaryLabel
-      label.widthAnchor.constraint(equalToConstant: 34).isActive = true
-      let slider = UISlider()
-      slider.minimumValue = minValue
-      slider.maximumValue = maxValue
-      slider.value = current
-      slider.accessibilityLabel = content.text
-      slider.widthAnchor.constraint(equalToConstant: 130).isActive = true
-      slider.addAction(UIAction { [weak self, weak slider, weak label] _ in
-        guard let slider else { return }
-        let tick = step > 0 ? (slider.value / step).rounded() * step : slider.value
-        label?.text = String(format: step < 1 ? "%.2f" : "%.0f", tick)
-        self?.send("change", ["id": id, "value": Double(tick)])
-      }, for: .touchUpInside)
-      slider.addAction(UIAction { [weak self, weak slider, weak label] _ in
-        guard let slider else { return }
-        let tick = step > 0 ? (slider.value / step).rounded() * step : slider.value
-        label?.text = String(format: step < 1 ? "%.2f" : "%.0f", tick)
-        self?.send("change", ["id": id, "value": Double(tick)])
-      }, for: .touchUpOutside)
-      holder.addArrangedSubview(slider)
-      holder.addArrangedSubview(label)
-      cell.accessoryView = holder
     } else if kind == "choice" {
       let choice = UIButton(type: .system)
       choice.setTitle(data["display"] as? String ?? "Select", for: .normal)
@@ -276,5 +251,81 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
         present(confirmation)
       } else { send("action", id) }
     }
+  }
+}
+
+ 
+/// Dedicated full-width iOS settings row. A UISlider must live inside the
+/// contentView with real constraints, never in UITableViewCell.accessoryView.
+private final class NovayomiPreferenceSliderCell: UITableViewCell {
+  private let titleLabel = UILabel()
+  private let valueLabel = UILabel()
+  private let slider = UISlider()
+  private var increment: Float = 1
+  private var onCommit: ((Double) -> Void)?
+
+  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+    super.init(style: style, reuseIdentifier: reuseIdentifier)
+    selectionStyle = .none
+    titleLabel.font = .preferredFont(forTextStyle: .body)
+    titleLabel.adjustsFontForContentSizeCategory = true
+    titleLabel.numberOfLines = 0
+    valueLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .medium)
+    valueLabel.textColor = .secondaryLabel
+    valueLabel.textAlignment = .right
+    valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+    for view in [titleLabel, valueLabel, slider] {
+      view.translatesAutoresizingMaskIntoConstraints = false
+      contentView.addSubview(view)
+    }
+    NSLayoutConstraint.activate([
+      titleLabel.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      titleLabel.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      slider.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+      slider.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      slider.trailingAnchor.constraint(equalTo: valueLabel.leadingAnchor, constant: -16),
+      slider.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
+      valueLabel.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      valueLabel.centerYAnchor.constraint(equalTo: slider.centerYAnchor),
+      valueLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 46),
+      slider.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+    ])
+    slider.isContinuous = true
+    slider.addTarget(self, action: #selector(valueChanged), for: .valueChanged)
+    slider.addTarget(self, action: #selector(valueCommitted), for: [.touchUpInside, .touchUpOutside])
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  func configure(data: [String: Any], onCommit: @escaping (Double) -> Void) {
+    self.onCommit = onCommit
+    titleLabel.text = data["title"] as? String ?? "Setting"
+    let lower = Float((data["min"] as? NSNumber)?.doubleValue ?? 0)
+    let upper = Float((data["max"] as? NSNumber)?.doubleValue ?? 10)
+    increment = max(0.001, Float((data["step"] as? NSNumber)?.doubleValue ?? 1))
+    slider.minimumValue = lower
+    slider.maximumValue = max(lower + increment, upper)
+    slider.value = min(max(lower, Float((data["value"] as? NSNumber)?.doubleValue ?? 0)), slider.maximumValue)
+    slider.accessibilityLabel = titleLabel.text
+    updateValueText()
+  }
+
+  private var snappedValue: Float {
+    let base = slider.minimumValue
+    return min(slider.maximumValue,
+               max(base, (base + ((slider.value - base) / increment).rounded() * increment)))
+  }
+  private func updateValueText() {
+    let value = snappedValue
+    valueLabel.text = increment < 1 ? String(format: "%.1f", value)
+                                    : String(format: "%.0f", value)
+    slider.accessibilityValue = valueLabel.text
+  }
+  @objc private func valueChanged() { updateValueText() }
+  @objc private func valueCommitted() {
+    slider.value = snappedValue
+    updateValueText()
+    onCommit?(Double(snappedValue))
   }
 }
