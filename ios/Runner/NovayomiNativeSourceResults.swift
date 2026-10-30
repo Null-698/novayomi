@@ -177,6 +177,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     let cell = tableView.dequeueReusableCell(withIdentifier: "novel")
       ?? UITableViewCell(style: .subtitle, reuseIdentifier: "novel")
     var config = cell.defaultContentConfiguration()
+    // Reused cells may still have an image request in flight.
+    cell.accessibilityIdentifier = nil
     if indexPath.row == novels.count {
       config.text = busy ? "Loading more…" : "Load more"
       config.image = UIImage(systemName: "arrow.down.circle")
@@ -191,9 +193,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
         : summary
       config.secondaryTextProperties.numberOfLines = 2
       config.image = UIImage(systemName: "book.closed")
+      config.imageProperties.maximumSize = CGSize(width: 48, height: 70)
       if let urlText = item["cover"] as? String,
          let url = URL(string: urlText),
          ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+        cell.accessibilityIdentifier = urlText
         if let cached = Self.coverCache.object(forKey: urlText as NSString) {
           config.image = cached
         } else {
