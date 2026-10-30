@@ -98,7 +98,7 @@ class _NativeIosDataStorageState extends ConsumerState<NativeIosDataStorage> {
               ref.read(backupFrequencyStateProvider.notifier).set(freq);
             }
           } else if (id == 'compression') {
-            final v = (value as num).round().clamp(0, 9);
+            final v = (value as num).round().clamp(0, 9).toInt();
             await ref.read(backupCompressionLevelProvider.notifier).set(v);
           } else if (id == 'clearOnLaunch') {
             ref.read(clearChapterCacheOnAppLaunchStateProvider.notifier).set(value == true);
@@ -162,7 +162,7 @@ class _NativeIosDataStorageState extends ConsumerState<NativeIosDataStorage> {
           {'id': 'backupFrequency', 'type': 'choice', 'title': 'Automatic backup',
            'value': freq.toString(), 'display':
                ['Off', 'Every 6 hours', 'Every 12 hours', 'Daily',
-                'Every 2 days', 'Weekly'][freq.clamp(0, 5)],
+                'Every 2 days', 'Weekly'][freq.clamp(0, 5).toInt()],
            'choices': [
              for (var i = 0; i < 6; i++)
                {'value': i.toString(), 'title':
