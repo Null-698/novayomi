@@ -34,6 +34,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private var busy = false
   private var selected = 0
   private var query = ""
+  private var globalMode = false
 
   init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger,
        data: [String: Any]) {
@@ -95,6 +96,12 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
     ])
+    globalMode = data["globalMode"] as? Bool ?? false
+    if globalMode {
+      search.placeholder = "Search all novel sources"
+      segmented.isHidden = true
+      navItem.rightBarButtonItem = nil
+    }
     apply(data)
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else { result(nil); return }
@@ -167,7 +174,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     } else {
       let item = novels[indexPath.row]
       config.text = item["title"] as? String ?? "Novel"
-      config.secondaryText = item["description"] as? String ?? ""
+      let summary = item["description"] as? String ?? ""
+      let source = item["source"] as? String ?? ""
+      config.secondaryText = globalMode && !source.isEmpty
+        ? source + (summary.isEmpty ? "" : " · " + summary)
+        : summary
       config.secondaryTextProperties.numberOfLines = 2
       config.image = UIImage(systemName: "book.closed")
       cell.accessoryType = .disclosureIndicator
