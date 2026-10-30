@@ -25,13 +25,11 @@ The existing iOS bottom tab bar is a real `UITabBar`. A native Library
 buttons, sorting, grid/list displays, image loading and context menus.
 `NativeIosNovelLibrary` supplies the existing reactive Riverpod/Isar data.
 
-**Integration status: STAGED; normal builds still use the existing Library.**
-To build a test IPA, open GitHub Actions → Build IPA Unsigned → Run workflow,
-enable **native_library_preview**, and build from the latest `main`.
-For a local build, use
-`flutter build ios --release --no-codesign --dart-define=NOVAYOMI_NATIVE_LIBRARY_PREVIEW=true`.
-The switch is iOS-only and defaults to false. Do not treat the preview as
-production-ready.
+**Integration status: ACTIVE on iOS.** The novel Library route uses the
+UIKit collection view directly. There is no native-Library preview flag,
+and unsigned IPA builds ship the native Library without special inputs.
+The backend continues to run in Dart, as before. Test the native interface
+on a device before treating its remaining UI migration stages as complete.
 
 Implemented in the staged native Library:
 - UICollectionView grid and list, system search field and category chips.

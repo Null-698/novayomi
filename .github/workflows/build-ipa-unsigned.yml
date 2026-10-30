@@ -7,11 +7,6 @@ on:
         description: 'Optional existing tag for publishing a GitHub Release'
         required: false
         type: string
-      native_library_preview:
-        description: 'Preview the native UIKit Novel Library (experimental; no data migration)'
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -78,7 +73,7 @@ jobs:
           # unclassified Xcode build failure; save verbose diagnostics instead.
           set +e
           flutter build ios --release --no-codesign --verbose \
-            --dart-define=NOVAYOMI_NATIVE_LIBRARY_PREVIEW=${{ inputs.native_library_preview || false }} 2>&1 \
+            2>&1 \
             | tee "$RUNNER_TEMP/novayomi-ios-build.log" \
             | grep --line-buffered -Ei 'error:|error \(|warning:|Swift Compiler Error|failed to|BUILD FAILED|Xcode build|Running pod install|Building for device|✓ Built|fatal error|Provisioning|signing'
           status=${PIPESTATUS[0]}

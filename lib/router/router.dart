@@ -192,15 +192,9 @@ class RouterNotifier extends ChangeNotifier {
         _branch(
           _genericRoute<String?>(
             name: "NovelLibrary",
-            // Native UIKit Library can be explicitly previewed on iOS.
-            // Normal builds retain the current feature-complete screen until
-            // the migration checklist and device tests are finished.
-            builder: (id) =>
-                defaultTargetPlatform == TargetPlatform.iOS &&
-                    const bool.fromEnvironment(
-                      'NOVAYOMI_NATIVE_LIBRARY_PREVIEW',
-                      defaultValue: false,
-                    )
+            // iOS uses the native UIKit Library by default. Dart remains
+            // the source of truth for data and repository operations.
+            builder: (id) => defaultTargetPlatform == TargetPlatform.iOS
                 ? const NativeIosNovelLibrary()
                 : LibraryScreen(itemType: ItemType.novel, presetInput: id),
           ),
