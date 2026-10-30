@@ -68,6 +68,7 @@ import 'package:mangayomi/modules/more/settings/reader/novel_reader_screen.dart'
 import 'package:mangayomi/modules/more/settings/settings_screen.dart';
 import 'package:mangayomi/modules/more/settings/native_ios_settings_screen.dart';
 import 'package:mangayomi/modules/more/settings/native_ios_preferences_screen.dart';
+import 'package:mangayomi/modules/more/settings/native_ios_service_settings.dart';
 import 'package:mangayomi/modules/more/settings/security/security_screen.dart';
 import 'package:mangayomi/core/navigation/app_navigator.dart';
 import 'package:mangayomi/services/crash_route_observer.dart';
@@ -272,8 +273,12 @@ class RouterNotifier extends ChangeNotifier {
     _genericRoute(name: "about", child: const AboutScreen()),
     _genericRoute(name: "errorReports", child: const ErrorReportsScreen()),
     _genericRoute(name: "openSourceLicenses", child: const LicensesScreen()),
-    _genericRoute(name: "track", child: const TrackScreen()),
-    _genericRoute(name: "sync", child: const SyncScreen()),
+    _genericRoute(name: "track",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosServiceSettings(mode: 'tracking') : const TrackScreen()),
+    _genericRoute(name: "sync",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosServiceSettings(mode: 'sync') : const SyncScreen()),
     _genericRoute<ItemType>(
       name: "sourceFilter",
       builder: (itemType) => SourcesFilterScreen(itemType: itemType),
