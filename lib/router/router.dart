@@ -39,6 +39,7 @@ import 'package:mangayomi/modules/more/settings/track/manage_trackers/manage_tra
 import 'package:mangayomi/modules/more/settings/track/manage_trackers/tracking_detail.dart';
 import 'package:mangayomi/modules/webview/webview.dart';
 import 'package:mangayomi/modules/browse/browse_screen.dart';
+import 'package:mangayomi/modules/browse/native_ios_browse_screen.dart';
 import 'package:mangayomi/modules/browse/extension/extension_lang.dart';
 import 'package:mangayomi/modules/browse/global_search/global_search_screen.dart';
 import 'package:mangayomi/modules/main_view/main_screen.dart';
@@ -209,7 +210,9 @@ class RouterNotifier extends ChangeNotifier {
         ),
         _branch(_genericRoute(name: "history", child: const HistoryScreen())),
         _branch(_genericRoute(name: "updates", child: const UpdatesScreen())),
-        _branch(_genericRoute(name: "browse", child: const BrowseScreen())),
+        _branch(_genericRoute(name: "browse",
+          child: defaultTargetPlatform == TargetPlatform.iOS
+              ? const NativeIosBrowseScreen() : const BrowseScreen())),
         _branch(_genericRoute(name: "more",
           child: defaultTargetPlatform == TargetPlatform.iOS
               ? const NativeIosMoreScreen() : const MoreScreen())),
