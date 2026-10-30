@@ -9,6 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mangayomi/l10n/generated/app_localizations.dart';
 import 'package:mangayomi/models/manga.dart';
+import 'package:mangayomi/models/settings.dart';
+import 'package:mangayomi/providers/reader_state_provider.dart';
+import 'package:mangayomi/modules/novel/tts/novel_tts_service.dart';
+import 'package:mangayomi/modules/novel/utils/novel_reader_fonts.dart';
 import 'package:mangayomi/modules/more/settings/appearance/providers/app_ui_scale_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/appearance/providers/date_format_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/appearance/providers/floating_navigation_bar_state_provider.dart';
@@ -112,6 +116,68 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
     final enabled = value == true;
     final amount = value is num ? value.toDouble() : 0.0;
     switch (id) {
+      case 'novelTheme':
+        final scheme = switch (value) {
+          'light' => ('#FFFFFF', '#000000'),
+          'black' => ('#000000', '#FFFFFF'),
+          'sepia' => ('#F5E6D3', '#5F4B32'),
+          _ => ('#292832', '#CCCCCC'),
+        };
+        ref.read(novelReaderThemeStateProvider.notifier).set(scheme.$1);
+        ref.read(novelReaderTextColorStateProvider.notifier).set(scheme.$2);
+      case 'novelBackground':
+        final bg = value?.toString() ?? '';
+        if (bg.length == 7 && bg.startsWith('#') &&
+            int.tryParse(bg.substring(1), radix: 16) != null) {
+          ref.read(novelReaderThemeStateProvider.notifier).set(bg);
+        }
+      case 'novelForeground':
+        final fg = value?.toString() ?? '';
+        if (fg.length == 7 && fg.startsWith('#') &&
+            int.tryParse(fg.substring(1), radix: 16) != null) {
+          ref.read(novelReaderTextColorStateProvider.notifier).set(fg);
+        }
+      case 'novelFontSize':
+        ref.read(novelFontSizeStateProvider.notifier).set(amount.round());
+      case 'novelPadding':
+        ref.read(novelReaderPaddingStateProvider.notifier).set(amount.round());
+      case 'novelLineHeight':
+        ref.read(novelReaderLineHeightStateProvider.notifier).set(amount);
+      case 'novelFontFamily':
+        ref.read(novelFontFamilyStateProvider.notifier)
+            .set(value == 'default' ? null : value?.toString());
+      case 'novelAlign':
+        final matches = NovelTextAlign.values.where((a) => a.name == value).toList();
+        if (matches.isNotEmpty) {
+          ref.read(novelTextAlignStateProvider.notifier).set(matches.first);
+        }
+      case 'novelMode':
+        final matches = ReaderMode.values.where((a) => a.name == value).toList();
+        if (matches.isNotEmpty) {
+          ref.read(defaultReadingModeStateProvider.notifier).set(matches.first);
+        }
+      case 'keepScreen':
+        ref.read(keepScreenOnReaderStateProvider.notifier).set(enabled);
+      case 'scrollPercentage':
+        ref.read(novelShowScrollPercentageStateProvider.notifier).set(enabled);
+      case 'removeSpacing':
+        ref.read(novelRemoveExtraParagraphSpacingStateProvider.notifier).set(enabled);
+      case 'tapScroll':
+        ref.read(novelTapToScrollStateProvider.notifier).set(enabled);
+      case 'volumePaging':
+        ref.read(volumeKeysPagingStateProvider.notifier).set(enabled);
+      case 'volumeInvert':
+        ref.read(volumeKeysInvertedStateProvider.notifier).set(enabled);
+      case 'ttsRate':
+        ref.read(ttsSpeechRateStateProvider.notifier).set(amount);
+        NovelTtsService.instance.setSpeed(amount);
+      case 'ttsPitch':
+        ref.read(ttsPitchStateProvider.notifier).set(amount);
+        NovelTtsService.instance.setPitch(amount);
+      case 'ttsLanguage':
+        final lang = value?.toString().trim() ?? '';
+        ref.read(ttsLanguageStateProvider.notifier).set(lang.isEmpty ? null : lang);
+        if (lang.isNotEmpty) NovelTtsService.instance.setLanguage(lang);
       case 'dohEnabled':
         ref.read(doHProviderStateProvider.notifier).setDoHEnabled(enabled);
       case 'dohProvider':
