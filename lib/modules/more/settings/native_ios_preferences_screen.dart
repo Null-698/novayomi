@@ -17,6 +17,10 @@ import 'package:mangayomi/modules/more/settings/appearance/providers/theme_mode_
 import 'package:mangayomi/modules/more/settings/appearance/providers/tint_surfaces_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/downloads/providers/downloads_state_provider.dart';
 import 'package:mangayomi/modules/more/settings/general/providers/general_state_provider.dart';
+import 'package:mangayomi/modules/more/settings/general/providers/doh_provider_notifier.dart';
+import 'package:mangayomi/services/http/doh/doh_providers.dart';
+import 'package:mangayomi/services/http/doh/doh_custom_store.dart';
+import 'package:mangayomi/services/http/cf_proxy_store.dart';
 import 'package:mangayomi/modules/more/settings/browse/providers/browse_state_provider.dart';
 import 'package:mangayomi/providers/l10n_providers.dart';
 import 'package:mangayomi/repositories/source_repository.dart';
@@ -96,6 +100,7 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
             return;
           }
           _write(id, data['value']);
+          if (mounted) setState(() {});
       }
     } catch (error, stack) {
       debugPrint('Native preference: $error');
@@ -107,6 +112,29 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
     final enabled = value == true;
     final amount = value is num ? value.toDouble() : 0.0;
     switch (id) {
+      case 'dohEnabled':
+        ref.read(doHProviderStateProvider.notifier).setDoHEnabled(enabled);
+      case 'dohProvider':
+        final providerId = int.tryParse(value.toString());
+        if (providerId == DoHProviders.customId) {
+          ref.read(doHProviderStateProvider.notifier).setCustomDoH(DohCustomStore.url);
+        } else if (providerId != null && DoHProviders.byId.containsKey(providerId)) {
+          ref.read(doHProviderStateProvider.notifier).setDoHProvider(providerId);
+        }
+      case 'dohUrl':
+        final url = value?.toString().trim() ?? '';
+        if (url.startsWith('https://')) {
+          ref.read(doHProviderStateProvider.notifier).setCustomDoH(url);
+        } else {
+          throw const FormatException('Custom DNS over HTTPS must start with https://');
+        }
+      case 'cfProxy':
+        final url = value?.toString().trim() ?? '';
+        if (url.isEmpty || url.startsWith('http://') || url.startsWith('https://')) {
+          CfProxyStore.setUrl(url);
+        } else {
+          throw const FormatException('Proxy URL must begin with http:// or https://');
+        }
       case 'appLock':
         ref.read(appLockEnabledStateProvider.notifier).set(enabled);
         if (!enabled) ref.read(appUnlockedStateProvider.notifier).unlock();
@@ -338,9 +366,28 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
           item('skipUnread', 'Skip with unread chapters', ref.watch(libraryUpdateSkipUnreadStateProvider)),
           item('skipNotStarted', 'Skip not started', ref.watch(libraryUpdateSkipNotStartedStateProvider)),
         ]));
+        final doh = ref.watch(doHProviderStateProvider);
+        final options = ref.watch(availableDoHProvidersProvider);
         groups.add(group('Network', [
+          item('dohEnabled', 'DNS over HTTPS', doh.enabled),
+          if (doh.enabled) ...[
+            item('dohProvider', 'DNS provider',
+              (doh.providerId ?? 0).toString(), type: 'choice',
+              display: doh.providerId == DoHProviders.customId ? 'Custom' :
+                (DoHProviders.byId[doh.providerId ?? 0]?.name ?? 'Cloudflare'),
+              choices: [
+                for (final provider in options)
+                  choice(provider.id.toString(), provider.name),
+                choice(DoHProviders.customId.toString(), 'Custom'),
+              ]),
+            if (doh.providerId == DoHProviders.customId)
+              item('dohUrl', 'Custom HTTPS DNS endpoint', DohCustomStore.url,
+                type: 'text'),
+          ] else
+            item('customDns', 'Custom DNS', ref.watch(customDnsStateProvider), type: 'text'),
           item('userAgent', 'User agent', ref.watch(userAgentStateProvider), type: 'text'),
-          item('customDns', 'Custom DNS', ref.watch(customDnsStateProvider), type: 'text'),
+          item('cfProxy', 'Cloudflare bypass proxy', CfProxyStore.url,
+            type: 'text', detail: 'Optional FlareSolverr/Byparr HTTP URL'),
         ]));
         groups.add(group('Navigation', [
           item('navTooltips', 'Show navigation tooltips', ref.watch(showNavDoubleTapTooltipStateProvider)),
