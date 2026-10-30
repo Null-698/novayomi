@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:mangayomi/modules/more/settings/security/providers/security_state_provider.dart';
+import 'package:mangayomi/services/secure_screen.dart';
+import 'package:mangayomi/utils/app_lock.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +31,32 @@ class NativeIosPreferencesScreen extends ConsumerStatefulWidget {
 }
 
 class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScreen> {
+  final LocalAuthentication _auth = LocalAuthentication();
+  bool _canAuthenticate = false;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.section == 'security') {
+      Future<void>(() async {
+        try {
+          final result = await _auth.canCheckBiometrics ||
+              await _auth.isDeviceSupported();
+          if (mounted) setState(() => _canAuthenticate = result);
+        } catch (_) {
+          if (mounted) setState(() => _canAuthenticate = false);
+        }
+      });
+    }
+  }
+  Future<bool> _authenticate() async {
+    try {
+      return await _auth.authenticate(
+        localizedReason: 'Authenticate to change security settings',
+        biometricOnly: false,
+        persistAcrossBackgrounding: true,
+      );
+    } catch (_) { return false; }
+  }
   MethodChannel? _channel;
   Map<String, Object?> _snapshot = const {};
   @override
@@ -59,7 +89,13 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
           final data = call.arguments;
           if (data is! Map) return;
           final id = data['id'] as String?;
-          if (id != null) _write(id, data['value']);
+          if (id == null) return;
+          if ((id == 'appLock' || id == 'appLockDelay') &&
+              (!_canAuthenticate || !await _authenticate())) {
+            await _channel?.invokeMethod<void>('update', _snapshot);
+            return;
+          }
+          _write(id, data['value']);
       }
     } catch (error, stack) {
       debugPrint('Native preference: $error');
@@ -71,6 +107,17 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
     final enabled = value == true;
     final amount = value is num ? value.toDouble() : 0.0;
     switch (id) {
+      case 'appLock':
+        ref.read(appLockEnabledStateProvider.notifier).set(enabled);
+        if (!enabled) ref.read(appUnlockedStateProvider.notifier).unlock();
+      case 'appLockDelay':
+        final minutes = int.tryParse(value.toString());
+        if (minutes != null && appLockDelays.contains(minutes)) {
+          ref.read(appLockDelayStateProvider.notifier).set(minutes);
+        }
+      case 'secureScreen':
+        final modes = SecureScreenMode.values.where((v) => v.name == value).toList();
+        if (modes.isNotEmpty) ref.read(secureScreenStateProvider.notifier).set(modes.first);
       case 'theme':
         if (value == 'system') {
           ref.read(followSystemThemeStateProvider.notifier).set(true);
@@ -175,6 +222,27 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
     final groups = <Map<String, Object?>>[];
     String title;
     switch (widget.section) {
+      case 'security':
+        title = 'Security';
+        final locked = ref.watch(appLockEnabledStateProvider);
+        groups.add(group('App lock', [
+          item('appLock', 'Require device authentication', locked,
+            detail: _canAuthenticate ? 'Authenticate to modify' : 'Device authentication unavailable'),
+          if (locked) item('appLockDelay', 'App lock delay',
+            ref.watch(appLockDelayStateProvider).toString(),
+            type: 'choice', display: ref.watch(appLockDelayStateProvider).toString(),
+            choices: [for (final minutes in appLockDelays)
+              choice(minutes.toString(), minutes == appLockOnLaunchOnly
+                ? 'On launch' : minutes == 0 ? 'Immediately' : minutes.toString() + ' minutes')]),
+        ], footer: 'Changing the app lock requires device authentication.'));
+        groups.add(group('Screen privacy', [
+          item('secureScreen', 'Secure screen',
+            ref.watch(secureScreenStateProvider).name,
+            type: 'choice',
+            display: ref.watch(secureScreenStateProvider).name,
+            choices: [for (final mode in SecureScreenMode.values)
+              choice(mode.name, mode.name)]),
+        ]));
       case 'appearance':
         title = 'Appearance';
         final follow = ref.watch(followSystemThemeStateProvider);
