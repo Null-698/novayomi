@@ -24,6 +24,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   private let root: UIView
   private let channel: FlutterMethodChannel
   private let heading = UILabel()
+  private let backButton = UIButton(type: .system)
   private let search = UISearchBar()
   private let segments = UISegmentedControl(items: ["Sources", "Extensions"])
   private let table = UITableView(frame: .zero, style: .insetGrouped)
@@ -46,7 +47,16 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemGroupedBackground
-    heading.text = "Browse"
+    let extensionLanding = data["initialSegment"] as? Int == 1
+    backButton.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
+    backButton.accessibilityLabel = "Back"
+    backButton.isHidden = !extensionLanding
+    backButton.addAction(UIAction { [weak self] _ in
+      self?.channel.invokeMethod("close", arguments: nil)
+    }, for: .touchUpInside)
+    backButton.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(backButton)
+    heading.text = extensionLanding ? "Extensions" : "Browse"
     heading.font = .preferredFont(forTextStyle: .largeTitle)
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
@@ -56,7 +66,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(search)
-    segments.selectedSegmentIndex = 0
+    segments.selectedSegmentIndex = extensionLanding ? 1 : 0
     segments.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
     segments.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(segments)
@@ -70,7 +80,12 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     root.addSubview(table)
     NSLayoutConstraint.activate([
       heading.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 12),
-      heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+      heading.leadingAnchor.constraint(equalTo: root.leadingAnchor,
+                                       constant: extensionLanding ? 62 : 20),
+      backButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
+      backButton.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+      backButton.widthAnchor.constraint(equalToConstant: 44),
+      backButton.heightAnchor.constraint(equalToConstant: 44),
       heading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
       search.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 6),
       search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
