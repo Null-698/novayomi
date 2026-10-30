@@ -36,6 +36,9 @@ class _NativeIosSourceFilterState extends ConsumerState<NativeIosSourceFilter> {
     try {
       if (call.method == 'close') {
         if (context.canPop()) context.pop();
+      } else if (call.method == 'navigate') {
+        final path = call.arguments as String?;
+        if (path != null) context.push(path);
       } else if (call.method == 'change') {
         final args = call.arguments;
         if (args is! Map) return;
@@ -54,7 +57,9 @@ class _NativeIosSourceFilterState extends ConsumerState<NativeIosSourceFilter> {
           final list = sourceRepository.getByItemType(widget.itemType)
               .where((e) => e.lang?.toLowerCase() == language &&
                   e.sourceCode?.isNotEmpty == true)
-              .map((e) => e..isActive = active..updatedAt = now)
+              .map((e) => e
+                ..isActive = active
+                ..updatedAt = now)
               .toList();
           if (list.isNotEmpty) await sourceRepository.putAll(list);
         }
