@@ -53,6 +53,7 @@ import 'package:mangayomi/modules/more/about/error_reports_screen.dart';
 import 'package:mangayomi/modules/more/about/licenses_screen.dart';
 import 'package:mangayomi/modules/more/download_queue/download_queue_screen.dart';
 import 'package:mangayomi/modules/more/more_screen.dart';
+import 'package:mangayomi/modules/more/native_ios_more_screen.dart';
 import 'package:mangayomi/modules/more/settings/appearance/appearance_screen.dart';
 import 'package:mangayomi/modules/more/settings/browse/browse_screen.dart';
 import 'package:mangayomi/modules/more/settings/browse/extension_server_screen.dart';
@@ -209,7 +210,9 @@ class RouterNotifier extends ChangeNotifier {
         _branch(_genericRoute(name: "history", child: const HistoryScreen())),
         _branch(_genericRoute(name: "updates", child: const UpdatesScreen())),
         _branch(_genericRoute(name: "browse", child: const BrowseScreen())),
-        _branch(_genericRoute(name: "more", child: const MoreScreen())),
+        _branch(_genericRoute(name: "more",
+          child: defaultTargetPlatform == TargetPlatform.iOS
+              ? const NativeIosMoreScreen() : const MoreScreen())),
       ],
     ),
     _genericRoute<(Source?, bool)>(
