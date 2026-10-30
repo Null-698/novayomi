@@ -35,6 +35,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private var selected = 0
   private var query = ""
   private var globalMode = false
+  private static let coverCache = NSCache<NSString, UIImage>()
 
   init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger,
        data: [String: Any]) {
@@ -135,6 +136,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   }
   private func apply(_ data: [String: Any]) {
     navItem.title = data["title"] as? String ?? "Novels"
+    if globalMode {
+      let text = data["emptyMessage"] as? String
+      search.text = data["query"] as? String ?? search.text
+      if novels.isEmpty, let text { search.accessibilityHint = text }
+    }
     novels = data["items"] as? [[String: Any]] ?? []
     hasMore = data["hasMore"] as? Bool ?? false
     busy = data["loading"] as? Bool ?? false
@@ -143,6 +149,10 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     empty.text = busy ? "Loading novels…" : "No novels found"
     empty.textColor = .secondaryLabel
     empty.textAlignment = .center
+    if novels.isEmpty, !busy, let text = data["emptyMessage"] as? String {
+      empty.text = text
+      empty.numberOfLines = 3
+    }
     table.backgroundView = novels.isEmpty ? empty : nil
   }
   @objc private func segmentChanged() {
@@ -181,6 +191,35 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
         : summary
       config.secondaryTextProperties.numberOfLines = 2
       config.image = UIImage(systemName: "book.closed")
+      if let urlText = item["cover"] as? String,
+         let url = URL(string: urlText),
+         ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+        if let cached = Self.coverCache.object(forKey: urlText as NSString) {
+          config.image = cached
+        } else {
+          // The cell's token prevents an earlier request from painting a
+          // recycled row after a fast scroll or source search.
+          cell.accessibilityIdentifier = urlText
+          var request = URLRequest(url: url,
+            cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+          for (name, value) in item["headers"] as? [String: String] ?? [:] {
+            request.setValue(value, forHTTPHeaderField: name)
+          }
+          URLSession.shared.dataTask(with: request) { [weak cell] data, _, _ in
+            guard let data, let image = UIImage(data: data) else { return }
+            Self.coverCache.setObject(image, forKey: urlText as NSString)
+            DispatchQueue.main.async {
+              guard let cell, cell.accessibilityIdentifier == urlText,
+                    var current = cell.contentConfiguration as? UIListContentConfiguration
+              else { return }
+              current.image = image
+              cell.contentConfiguration = current
+            }
+          }.resume()
+        }
+      } else {
+        cell.accessibilityIdentifier = nil
+      }
       cell.accessoryType = .disclosureIndicator
     }
     config.imageProperties.tintColor = root.tintColor
