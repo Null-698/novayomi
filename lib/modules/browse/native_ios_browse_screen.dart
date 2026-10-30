@@ -16,7 +16,8 @@ import 'package:mangayomi/repositories/source_repository.dart';
 /// The root iOS Browse tab is UIKit. All source installation, filtering and
 /// extension execution still use existing Dart services and routes.
 class NativeIosBrowseScreen extends ConsumerStatefulWidget {
-  const NativeIosBrowseScreen({super.key});
+  const NativeIosBrowseScreen({super.key, this.initialSegment = 0});
+  final int initialSegment;
 
   @override
   ConsumerState<NativeIosBrowseScreen> createState() => _NativeIosBrowseScreenState();
@@ -53,6 +54,8 @@ class _NativeIosBrowseScreenState extends ConsumerState<NativeIosBrowseScreen> {
   Future<void> _handleAction(MethodCall call) async {
     if (!mounted) return;
     switch (call.method) {
+      case 'close':
+        if (context.canPop()) context.pop();
       case 'openSource':
         final id = call.arguments as int?;
         if (id == null) return;
@@ -112,6 +115,7 @@ class _NativeIosBrowseScreenState extends ConsumerState<NativeIosBrowseScreen> {
     final extensions = ref.watch(getExtensionsStreamProvider(ItemType.novel)).asData?.value
         ?? const <Source>[];
     _current = <String, Object?>{
+      'initialSegment': widget.initialSegment,
       'extensions': <Map<String, Object?>>[
         for (final extension in extensions)
           if (extension.id != null && (showNsfw || !(extension.isNsfw ?? false)) &&
