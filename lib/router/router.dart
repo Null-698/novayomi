@@ -26,6 +26,7 @@ import 'package:mangayomi/modules/more/data_and_storage/create_backup.dart';
 import 'package:mangayomi/modules/more/data_and_storage/data_and_storage.dart';
 import 'package:mangayomi/modules/more/settings/appearance/custom_navigation_settings.dart';
 import 'package:mangayomi/modules/more/settings/browse/source_repositories.dart';
+import 'package:mangayomi/modules/more/settings/browse/native_ios_source_repositories.dart';
 import 'package:mangayomi/providers/reader_state_provider.dart';
 import 'package:mangayomi/modules/more/statistics/statistics_screen.dart';
 import 'package:mangayomi/modules/novel/novel_reader_view.dart';
@@ -303,7 +304,10 @@ class RouterNotifier extends ChangeNotifier {
     ),
     _genericRoute<ItemType>(
       name: "SourceRepositories",
-      builder: (itemType) => SourceRepositories(itemType: itemType),
+      builder: (itemType) => defaultTargetPlatform == TargetPlatform.iOS &&
+              itemType == ItemType.novel
+          ? NativeIosSourceRepositories(itemType: itemType)
+          : SourceRepositories(itemType: itemType),
     ),
     _genericRoute(name: "downloads",
       child: defaultTargetPlatform == TargetPlatform.iOS
