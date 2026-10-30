@@ -62,6 +62,7 @@ jobs:
             lib/modules/more/download_queue/native_ios_download_queue.dart \
             lib/modules/more/settings/native_ios_settings_screen.dart \
             lib/modules/more/settings/native_ios_preferences_screen.dart \
+            lib/modules/manga/home/native_ios_source_results.dart \
             lib/modules/library/widgets/library_dialogs.dart \
             lib/router/router.dart
 
@@ -76,6 +77,7 @@ jobs:
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeDownloads.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeSettings.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativePreferences.swift
+          xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeSourceResults.swift
 
       - name: Build unsigned iOS IPA
         env:
