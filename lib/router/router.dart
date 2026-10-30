@@ -43,6 +43,7 @@ import 'package:mangayomi/modules/browse/browse_screen.dart';
 import 'package:mangayomi/modules/browse/native_ios_browse_screen.dart';
 import 'package:mangayomi/modules/browse/extension/extension_lang.dart';
 import 'package:mangayomi/modules/browse/global_search/global_search_screen.dart';
+import 'package:mangayomi/modules/browse/global_search/native_ios_global_search.dart';
 import 'package:mangayomi/modules/main_view/main_screen.dart';
 import 'package:mangayomi/modules/history/history_screen.dart';
 import 'package:mangayomi/modules/history/native_ios_activity_screen.dart';
@@ -263,7 +264,10 @@ class RouterNotifier extends ChangeNotifier {
     ),
     _genericRoute<(String?, ItemType)>(
       name: "globalSearch",
-      builder: (data) => GlobalSearchScreen(search: data.$1, itemType: data.$2),
+      builder: (data) => defaultTargetPlatform == TargetPlatform.iOS &&
+              data.$2 == ItemType.novel
+          ? NativeIosGlobalSearch(search: data.$1, itemType: data.$2)
+          : GlobalSearchScreen(search: data.$1, itemType: data.$2),
     ),
     _genericRoute(name: "about", child: const AboutScreen()),
     _genericRoute(name: "errorReports", child: const ErrorReportsScreen()),

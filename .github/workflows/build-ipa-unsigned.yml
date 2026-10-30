@@ -63,6 +63,7 @@ jobs:
             lib/modules/more/settings/native_ios_settings_screen.dart \
             lib/modules/more/settings/native_ios_preferences_screen.dart \
             lib/modules/more/settings/browse/native_ios_source_repositories.dart \
+            lib/modules/browse/global_search/native_ios_global_search.dart \
             lib/modules/manga/home/native_ios_source_results.dart \
             lib/modules/library/widgets/library_dialogs.dart \
             lib/router/router.dart
