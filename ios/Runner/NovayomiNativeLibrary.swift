@@ -157,6 +157,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     collection.dataSource = self
     collection.delegate = self
     collection.register(NovayomiLibraryCell.self, forCellWithReuseIdentifier: "novel")
+    // Keep the Continue Reading shelf INSIDE this vertical collection's
+    // scrollable section header. It must not be pinned above the book grid.
+    collection.register(UICollectionReusableView.self,
+      forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
+      withReuseIdentifier: "continue-reading-header")
     let longPress = UILongPressGestureRecognizer(target: self, action: #selector(longPressNovel(_:)))
     longPress.minimumPressDuration = 0.5
     longPress.cancelsTouchesInView = true
@@ -202,7 +207,6 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     continueHeading.font = .preferredFont(forTextStyle: .headline)
     continueHeading.textColor = .label
     continueHeading.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(continueHeading)
     continueCollection.backgroundColor = .clear
     continueCollection.showsHorizontalScrollIndicator = false
     continueCollection.dataSource = self
@@ -210,7 +214,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     continueCollection.register(NovayomiLibraryCell.self,
                                 forCellWithReuseIdentifier: "novel")
     continueCollection.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(continueCollection)
+    // Mounted into the reusable header in viewForSupplementaryElementOfKind.
     continueHeadingHeight = continueHeading.heightAnchor.constraint(equalToConstant: 0)
     continueCollectionHeight = continueCollection.heightAnchor.constraint(equalToConstant: 0)
     if #available(iOS 26.0, *) {
@@ -285,15 +289,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       categoryStack.topAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.topAnchor),
       categoryStack.bottomAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.bottomAnchor),
       categoryStack.heightAnchor.constraint(equalTo: categoryScroll.frameLayoutGuide.heightAnchor),
-      continueHeading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-      continueHeading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
-      continueHeading.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
-      continueHeadingHeight,
-      continueCollection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      continueCollection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      continueCollection.topAnchor.constraint(equalTo: continueHeading.bottomAnchor, constant: 3),
-      continueCollectionHeight,
-      collection.topAnchor.constraint(equalTo: continueCollection.bottomAnchor, constant: 4),
+      collection.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
       collection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       collection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       collectionBottom
@@ -381,6 +377,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     continueHeading.isHidden = !hasShelf
     continueCollection.isHidden = !hasShelf
     continueCollection.reloadData()
+    collection.collectionViewLayout.invalidateLayout()
     if let label = data["title"] as? String { heading.text = label }
     if let index = data["sortIndex"] as? Int { sortIndex = index }
     if let size = data["gridSize"] as? Int { gridSize = size }
@@ -562,6 +559,25 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     }
     emptyBackground.isHidden = !displayed.isEmpty
     collection.reloadData()
+    // With one or two novels the content can be shorter than the viewport.
+    // Make enough room to scroll the entire shelf away even in tiny libraries,
+    // instead of leaving the shelf permanently stuck on screen.
+    DispatchQueue.main.async { [weak self] in
+      self?.ensureShelfCanScrollAway()
+    }
+  }
+
+  private func ensureShelfCanScrollAway() {
+    let scroll = collection
+    guard scroll.bounds.height > 0 else { return }
+    scroll.layoutIfNeeded()
+    let requiredTravel: CGFloat = continueItems.isEmpty ? 0 : 238
+    let natural = scroll.collectionViewLayout.collectionViewContentSize.height
+    let extra = requiredTravel == 0 ? 0
+      : max(0, scroll.bounds.height + requiredTravel - natural)
+    if abs(scroll.contentInset.bottom - extra) > 1 {
+      scroll.contentInset.bottom = extra
+    }
   }
 
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
@@ -638,6 +654,42 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   @objc private func refreshLibrary() {
     channel.invokeMethod("refresh", arguments: nil)
+  }
+
+  // A normal, non-pinned UICollectionView section header. It travels
+  // vertically with the book cells, while its inner shelf scrolls horizontally.
+  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
+                      referenceSizeForHeaderInSection section: Int) -> CGSize {
+    guard collectionView === collection, !continueItems.isEmpty else { return .zero }
+    return CGSize(width: collectionView.bounds.width, height: 238)
+  }
+
+  func collectionView(_ collectionView: UICollectionView,
+                      viewForSupplementaryElementOfKind kind: String,
+                      at indexPath: IndexPath) -> UICollectionReusableView {
+    guard collectionView === collection, kind == UICollectionView.elementKindSectionHeader else {
+      return UICollectionReusableView()
+    }
+    let header = collectionView.dequeueReusableSupplementaryView(
+      ofKind: kind, withReuseIdentifier: "continue-reading-header",
+      for: indexPath)
+    if continueHeading.superview !== header {
+      continueHeading.removeFromSuperview()
+      continueCollection.removeFromSuperview()
+      header.addSubview(continueHeading)
+      header.addSubview(continueCollection)
+      NSLayoutConstraint.activate([
+        continueHeading.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 18),
+        continueHeading.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -18),
+        continueHeading.topAnchor.constraint(equalTo: header.topAnchor, constant: 4),
+        continueHeadingHeight,
+        continueCollection.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+        continueCollection.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+        continueCollection.topAnchor.constraint(equalTo: continueHeading.bottomAnchor, constant: 3),
+        continueCollectionHeight
+      ])
+    }
+    return header
   }
 
   func numberOfSections(in collectionView: UICollectionView) -> Int { 1 }
