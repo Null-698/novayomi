@@ -206,6 +206,32 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
         self?.send("change", ["id": id, "value": alert?.textFields?.first?.text ?? ""])
       })
       present(alert)
+    } else if type == "credentials" {
+      let alert = UIAlertController(title: data["title"] as? String ?? "Log in",
+        message: "Your credentials are sent only to the existing service.",
+        preferredStyle: .alert)
+      alert.addTextField { field in
+        field.placeholder = "Email or username"
+        field.textContentType = .username
+        field.keyboardType = .emailAddress
+        field.autocapitalizationType = .none
+        field.autocorrectionType = .no
+      }
+      alert.addTextField { field in
+        field.placeholder = "Password"
+        field.textContentType = .password
+        field.isSecureTextEntry = true
+        field.autocorrectionType = .no
+      }
+      alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+      alert.addAction(UIAlertAction(title: "Log in", style: .default) { [weak self, weak alert] _ in
+        guard let fields = alert?.textFields, fields.count == 2 else { return }
+        // Do not store these strings in a snapshot, UserDefaults or logs.
+        self?.send("credentials", ["id": id,
+          "username": fields[0].text ?? "",
+          "password": fields[1].text ?? ""])
+      })
+      present(alert)
     } else if type == "link" {
       send("navigate", id)
     } else if type == "action" {
