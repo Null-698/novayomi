@@ -88,6 +88,12 @@ import UniformTypeIdentifiers
         withId: "novayomi/native-settings"
       )
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NovayomiNativePreferencesView") {
+      registrar.register(
+        NovayomiNativePreferencesFactory(messenger: registrar.messenger()),
+        withId: "novayomi/native-preferences"
+      )
+    }
 
     let readerChannel = FlutterMethodChannel(
       name: "novayomi/native-reader",

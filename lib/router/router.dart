@@ -64,6 +64,7 @@ import 'package:mangayomi/modules/more/settings/general/general_screen.dart';
 import 'package:mangayomi/modules/more/settings/reader/novel_reader_screen.dart';
 import 'package:mangayomi/modules/more/settings/settings_screen.dart';
 import 'package:mangayomi/modules/more/settings/native_ios_settings_screen.dart';
+import 'package:mangayomi/modules/more/settings/native_ios_preferences_screen.dart';
 import 'package:mangayomi/modules/more/settings/security/security_screen.dart';
 import 'package:mangayomi/core/navigation/app_navigator.dart';
 import 'package:mangayomi/services/crash_route_observer.dart';
@@ -247,7 +248,10 @@ class RouterNotifier extends ChangeNotifier {
     _genericRoute(name: "settings",
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosSettingsScreen() : const SettingsScreen()),
-    _genericRoute(name: "appearance", child: const AppearanceScreen()),
+    _genericRoute(name: "appearance",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'appearance')
+          : const AppearanceScreen()),
     _genericRoute<Source>(
       name: "extension_detail",
       builder: (source) => ExtensionDetail(source: source),
@@ -277,9 +281,15 @@ class RouterNotifier extends ChangeNotifier {
       builder: (data) => CategoriesScreen(data: data),
     ),
     _genericRoute(name: "statistics", child: const StatisticsScreen()),
-    _genericRoute(name: "general", child: const GeneralScreen()),
+    _genericRoute(name: "general",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'general')
+          : const GeneralScreen()),
     _genericRoute(name: "novelReaderMode", child: const NovelReaderScreen()),
-    _genericRoute(name: "browseS", child: const BrowseSScreen()),
+    _genericRoute(name: "browseS",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'browseS')
+          : const BrowseSScreen()),
     _genericRoute(
       name: "extensionServer",
       child: const ExtensionServerScreen(),
@@ -288,7 +298,10 @@ class RouterNotifier extends ChangeNotifier {
       name: "SourceRepositories",
       builder: (itemType) => SourceRepositories(itemType: itemType),
     ),
-    _genericRoute(name: "downloads", child: const DownloadsScreen()),
+    _genericRoute(name: "downloads",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosPreferencesScreen(section: 'downloads')
+          : const DownloadsScreen()),
     _genericRoute(name: "dataAndStorage", child: const DataAndStorage()),
     _genericRoute(name: "security", child: const SecurityScreen()),
     _genericRoute(name: "manageTrackers", child: const ManageTrackersScreen()),
