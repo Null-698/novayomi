@@ -155,7 +155,7 @@ class _NativeIosExtensionDetailState extends ConsumerState<NativeIosExtensionDet
           'type': 'text', 'value': v.value ?? ''});
       } else if (pref.listPreference case final v?) {
         final options = v.entries ?? const <String>[];
-        final current = (v.valueIndex ?? 0).clamp(0, options.isEmpty ? 0 : options.length - 1);
+        final current = (v.valueIndex ?? 0).clamp(0, options.isEmpty ? 0 : options.length - 1).toInt();
         rows.add({'id': 'pref:$i', 'title': v.title ?? pref.key ?? 'Option',
           'type': 'choice', 'value': current.toString(),
           'display': options.isEmpty ? '-' : options[current],
