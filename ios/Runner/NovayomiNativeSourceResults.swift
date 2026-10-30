@@ -100,6 +100,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     globalMode = data["globalMode"] as? Bool ?? false
     if globalMode {
       search.placeholder = "Search all novel sources"
+      search.text = data["query"] as? String ?? ""
       segmented.isHidden = true
       navItem.rightBarButtonItem = nil
     }
@@ -138,7 +139,6 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     navItem.title = data["title"] as? String ?? "Novels"
     if globalMode {
       let text = data["emptyMessage"] as? String
-      search.text = data["query"] as? String ?? search.text
       if novels.isEmpty, let text { search.accessibilityHint = text }
     }
     novels = data["items"] as? [[String: Any]] ?? []
