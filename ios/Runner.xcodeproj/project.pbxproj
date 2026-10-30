@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C12A30020000000000000001 /* NovayomiNativeNovelDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30020000000000000002 /* NovayomiNativeNovelDetail.swift */; };
 		C12A30010000000000000001 /* NovayomiNativeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = C12A30010000000000000002 /* NovayomiNativeLibrary.swift */; };
 		A715AA310000000000000001 /* NovayomiNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A715AA310000000000000002 /* NovayomiNativeReader.swift */; };
 		AB12CD340000000000000001 /* NovayomiNativeBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12CD340000000000000002 /* NovayomiNativeBars.swift */; };
@@ -34,6 +35,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C12A30020000000000000002 /* NovayomiNativeNovelDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeNovelDetail.swift; sourceTree = "<group>"; };
 		C12A30010000000000000002 /* NovayomiNativeLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeLibrary.swift; sourceTree = "<group>"; };
 		A715AA310000000000000002 /* NovayomiNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeReader.swift; sourceTree = "<group>"; };
 		AB12CD340000000000000002 /* NovayomiNativeBars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovayomiNativeBars.swift; sourceTree = "<group>"; };
@@ -163,6 +165,7 @@
 				AB12CD340000000000000002 /* NovayomiNativeBars.swift */,
 				A715AA310000000000000002 /* NovayomiNativeReader.swift */,
 				C12A30010000000000000002 /* NovayomiNativeLibrary.swift */,
+				C12A30020000000000000002 /* NovayomiNativeNovelDetail.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -400,6 +403,7 @@
 				AB12CD340000000000000001 /* NovayomiNativeBars.swift in Sources */,
 				A715AA310000000000000001 /* NovayomiNativeReader.swift in Sources */,
 				C12A30010000000000000001 /* NovayomiNativeLibrary.swift in Sources */,
+				C12A30020000000000000001 /* NovayomiNativeNovelDetail.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

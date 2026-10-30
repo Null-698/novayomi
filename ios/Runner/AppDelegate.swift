@@ -52,6 +52,12 @@ import UniformTypeIdentifiers
         withId: "novayomi/native-library"
       )
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NovayomiNovelDetailView") {
+      registrar.register(
+        NovayomiNovelDetailFactory(messenger: registrar.messenger()),
+        withId: "novayomi/native-novel-detail"
+      )
+    }
 
     let readerChannel = FlutterMethodChannel(
       name: "novayomi/native-reader",

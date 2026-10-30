@@ -1,0 +1,375 @@
+import Flutter
+import UIKit
+
+/// Phase 2.2. The entire visible novel-details screen is UIKit; all chapter,
+/// extension, download, history and database operations stay in existing Dart.
+final class NovayomiNovelDetailFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64,
+              arguments args: Any?) -> FlutterPlatformView {
+    NovayomiNovelDetailView(frame: frame, id: viewId, messenger: messenger,
+                            data: args as? [String: Any] ?? [:])
+  }
+}
+
+private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
+    UITableViewDelegate, UITableViewDataSource, UISearchBarDelegate {
+  private let root: UIView
+  private let channel: FlutterMethodChannel
+  private let nav = UINavigationBar()
+  private let navItem = UINavigationItem(title: "Novel")
+  private let search = UISearchBar()
+  private let table = UITableView(frame: .zero, style: .insetGrouped)
+  private let refresh = UIRefreshControl()
+  private var info: [String: Any] = [:]
+  private var chapters: [[String: Any]] = []
+  private var visibleChapters: [[String: Any]] = []
+  private var query = ""
+  private var reversed = false
+  private var readChapterId: Int?
+  private var favorite = false
+
+  init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger,
+       data: [String: Any]) {
+    root = UIView(frame: frame)
+    channel = FlutterMethodChannel(name: "novayomi/native-novel-detail/\(id)",
+                                   binaryMessenger: messenger)
+    super.init()
+    root.backgroundColor = .systemBackground
+    nav.translatesAutoresizingMaskIntoConstraints = false
+    navItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "chevron.backward"),
+      primaryAction: UIAction { [weak self] _ in self?.send("close") })
+    navItem.leftBarButtonItem?.accessibilityLabel = "Back to Library"
+    nav.setItems([navItem], animated: false)
+    root.addSubview(nav)
+
+    search.placeholder = "Search chapters"
+    search.searchBarStyle = .minimal
+    search.delegate = self
+    search.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(search)
+
+    table.translatesAutoresizingMaskIntoConstraints = false
+    table.backgroundColor = .systemGroupedBackground
+    table.separatorStyle = .singleLine
+    table.estimatedRowHeight = 70
+    table.rowHeight = UITableView.automaticDimension
+    table.dataSource = self
+    table.delegate = self
+    table.register(NovayomiNovelInfoCell.self, forCellReuseIdentifier: "novel-info")
+    table.register(UITableViewCell.self, forCellReuseIdentifier: "novel-chapter")
+    refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
+    table.refreshControl = refresh
+    root.addSubview(table)
+
+    NSLayoutConstraint.activate([
+      nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
+      nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+      nav.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      search.topAnchor.constraint(equalTo: nav.bottomAnchor),
+      search.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+      search.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      search.heightAnchor.constraint(equalToConstant: 52),
+      table.topAnchor.constraint(equalTo: search.bottomAnchor),
+      table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+      table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+      table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+    ])
+    apply(data)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { result(nil); return }
+      switch call.method {
+      case "update":
+        if let data = call.arguments as? [String: Any] { self.apply(data) }
+        result(nil)
+      case "refreshComplete":
+        self.refresh.endRefreshing()
+        result(nil)
+      case "error":
+        let alert = UIAlertController(title: "Novel action failed",
+          message: call.arguments as? String ?? "Unknown error", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        self.presentNative(alert)
+        result(nil)
+      default: result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+  deinit { channel.setMethodCallHandler(nil) }
+  func view() -> UIView { root }
+
+  private func send(_ kind: String, _ value: Any? = nil) {
+    channel.invokeMethod(kind, arguments: value)
+  }
+
+  private func apply(_ data: [String: Any]) {
+    info = data
+    chapters = data["chapters"] as? [[String: Any]] ?? []
+    favorite = data["favorite"] as? Bool ?? false
+    readChapterId = data["readChapterId"] as? Int
+    navItem.title = data["title"] as? String ?? "Novel"
+    navItem.rightBarButtonItems = [
+      UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"),
+        menu: UIMenu(children: [
+          UIAction(title: "Check for updates", image: UIImage(systemName: "arrow.clockwise")) {
+            [weak self] _ in self?.send("refresh")
+          },
+          UIAction(title: "Download unread chapters", image: UIImage(systemName: "arrow.down.circle")) {
+            [weak self] _ in self?.send("downloadUnread")
+          },
+          UIAction(title: "Sort chapters", image: UIImage(systemName: "arrow.up.arrow.down")) {
+            [weak self] _ in
+            self?.reversed.toggle()
+            self?.filter()
+          },
+          UIAction(title: "Copy novel title", image: UIImage(systemName: "doc.on.doc")) {
+            [weak self] _ in UIPasteboard.general.string = self?.info["title"] as? String
+          }
+        ])),
+      UIBarButtonItem(image: UIImage(systemName: favorite ? "heart.fill" : "heart"),
+        primaryAction: UIAction { [weak self] _ in self?.send("favorite") })
+    ]
+    navItem.rightBarButtonItems?.last?.accessibilityLabel =
+      favorite ? "Remove from Library" : "Add to Library"
+    filter()
+  }
+
+  private func filter() {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    visibleChapters = chapters.filter {
+      trimmed.isEmpty ||
+      ($0["name"] as? String ?? "").localizedCaseInsensitiveContains(trimmed) ||
+      ($0["scanlator"] as? String ?? "").localizedCaseInsensitiveContains(trimmed)
+    }
+    if reversed { visibleChapters.reverse() }
+    table.reloadData()
+  }
+
+  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    query = searchText
+    filter()
+  }
+  func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+    searchBar.resignFirstResponder()
+  }
+
+  @objc private func refreshRequested() { send("refresh") }
+
+  func numberOfSections(in tableView: UITableView) -> Int { 2 }
+  func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    section == 0 ? 1 : visibleChapters.count
+  }
+  func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    section == 1 ? "Chapters · \(visibleChapters.count)" : nil
+  }
+
+  func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    if indexPath.section == 0 {
+      let cell = tableView.dequeueReusableCell(withIdentifier: "novel-info", for: indexPath)
+        as! NovayomiNovelInfoCell
+      cell.configure(info)
+      cell.onRead = { [weak self] in self?.send("resume") }
+      return cell
+    }
+    let chapter = visibleChapters[indexPath.row]
+    let cell = tableView.dequeueReusableCell(withIdentifier: "novel-chapter", for: indexPath)
+    var configuration = UIListContentConfiguration.subtitleCell()
+    configuration.text = chapter["name"] as? String ?? "Chapter"
+    let isRead = chapter["read"] as? Bool ?? false
+    configuration.secondaryText = [
+      chapter["date"] as? String ?? "",
+      chapter["scanlator"] as? String ?? "",
+      isRead ? "Read" : "Unread"
+    ].filter { !$0.isEmpty }.joined(separator: " · ")
+    configuration.textProperties.color = isRead ? .secondaryLabel : .label
+    configuration.textProperties.numberOfLines = 2
+    configuration.secondaryTextProperties.numberOfLines = 1
+    cell.contentConfiguration = configuration
+    let id = chapter["id"] as? Int ?? -1
+    let bookmarked = chapter["bookmark"] as? Bool ?? false
+    let downloaded = chapter["downloaded"] as? Bool ?? false
+    cell.accessoryView = nil
+    let button = UIButton(type: .system)
+    button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
+    button.accessibilityLabel = "Chapter actions"
+    button.showsMenuAsPrimaryAction = true
+    button.menu = UIMenu(children: [
+      UIAction(title: isRead ? "Mark unread" : "Mark read",
+        image: UIImage(systemName: isRead ? "circle" : "checkmark.circle")) {
+        [weak self] _ in self?.send("toggleRead", id)
+      },
+      UIAction(title: bookmarked ? "Remove bookmark" : "Bookmark",
+        image: UIImage(systemName: "bookmark")) {
+        [weak self] _ in self?.send("toggleBookmark", id)
+      },
+      UIAction(title: downloaded ? "Downloaded" : "Download chapter",
+        image: UIImage(systemName: "arrow.down.circle"),
+        attributes: downloaded ? [.disabled] : []) {
+        [weak self] _ in self?.send("download", id)
+      }
+    ])
+    button.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+    cell.accessoryView = button
+    cell.accessibilityHint = "Double tap to read"
+    return cell
+  }
+
+  func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    if indexPath.section == 0 {
+      send("resume")
+    } else if visibleChapters.indices.contains(indexPath.row),
+              let id = visibleChapters[indexPath.row]["id"] as? Int {
+      send("read", id)
+    }
+  }
+
+  func tableView(_ tableView: UITableView,
+    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+    guard indexPath.section == 1, visibleChapters.indices.contains(indexPath.row),
+          let id = visibleChapters[indexPath.row]["id"] as? Int else { return nil }
+    let read = visibleChapters[indexPath.row]["read"] as? Bool ?? false
+    let mark = UIContextualAction(style: .normal, title: read ? "Unread" : "Read") {
+      [weak self] _, _, completion in
+      self?.send("toggleRead", id)
+      completion(true)
+    }
+    mark.backgroundColor = .systemBlue
+    let download = UIContextualAction(style: .normal, title: "Download") {
+      [weak self] _, _, completion in
+      self?.send("download", id)
+      completion(true)
+    }
+    download.backgroundColor = .systemTeal
+    return UISwipeActionsConfiguration(actions: [download, mark])
+  }
+
+  private func presentNative(_ child: UIViewController) {
+    guard var presenter = root.window?.rootViewController else { return }
+    while let next = presenter.presentedViewController { presenter = next }
+    presenter.present(child, animated: true)
+  }
+}
+
+/// The native header reads existing Manga fields without a second backend.
+private final class NovayomiNovelInfoCell: UITableViewCell {
+  var onRead: (() -> Void)?
+  private let cover = UIImageView()
+  private let heading = UILabel()
+  private let detail = UILabel()
+  private let descriptionLabel = UILabel()
+  private let genres = UILabel()
+  private let readButton = UIButton(type: .system)
+  private var coverRequest: URLSessionDataTask?
+  private var coverKey: String = ""
+
+  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+    super.init(style: style, reuseIdentifier: reuseIdentifier)
+    selectionStyle = .none
+    cover.layer.cornerRadius = 10
+    cover.clipsToBounds = true
+    cover.contentMode = .scaleAspectFill
+    cover.backgroundColor = .secondarySystemGroupedBackground
+    cover.translatesAutoresizingMaskIntoConstraints = false
+    cover.widthAnchor.constraint(equalToConstant: 112).isActive = true
+    cover.heightAnchor.constraint(equalToConstant: 164).isActive = true
+
+    heading.font = .preferredFont(forTextStyle: .title2)
+    heading.numberOfLines = 3
+    heading.adjustsFontForContentSizeCategory = true
+    detail.font = .preferredFont(forTextStyle: .subheadline)
+    detail.textColor = .secondaryLabel
+    detail.numberOfLines = 4
+    descriptionLabel.font = .preferredFont(forTextStyle: .body)
+    descriptionLabel.numberOfLines = 0
+    descriptionLabel.adjustsFontForContentSizeCategory = true
+    genres.font = .preferredFont(forTextStyle: .footnote)
+    genres.textColor = .secondaryLabel
+    genres.numberOfLines = 2
+    readButton.configuration = .filled()
+    readButton.setTitle("Read / Continue", for: .normal)
+    readButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    readButton.addTarget(self, action: #selector(readTapped), for: .touchUpInside)
+
+    let right = UIStackView(arrangedSubviews: [heading, detail])
+    right.axis = .vertical
+    right.spacing = 12
+    right.alignment = .leading
+    let row = UIStackView(arrangedSubviews: [cover, right])
+    row.axis = .horizontal
+    row.alignment = .top
+    row.spacing = 14
+    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, genres, readButton])
+    column.axis = .vertical
+    column.spacing = 14
+    column.translatesAutoresizingMaskIntoConstraints = false
+    contentView.addSubview(column)
+    NSLayoutConstraint.activate([
+      column.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+      column.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+      column.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      column.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+    ])
+  }
+  required init?(coder: NSCoder) { fatalError("Storyboard unsupported") }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    coverRequest?.cancel()
+    coverRequest = nil
+    coverKey = ""
+    cover.image = UIImage(systemName: "book.closed")
+    onRead = nil
+  }
+
+  func configure(_ data: [String: Any]) {
+    heading.text = data["title"] as? String ?? "Untitled"
+    let info = [
+      data["author"] as? String ?? "",
+      data["status"] as? String ?? "",
+      data["source"] as? String ?? ""
+    ].filter { !$0.isEmpty }
+    detail.text = info.joined(separator: "\n")
+    let html = data["description"] as? String ?? ""
+    let plain = html.replacingOccurrences(of: "<[^>]+>", with: " ",
+       options: .regularExpression)
+      .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    descriptionLabel.text = String(plain.prefix(950))
+    descriptionLabel.isHidden = plain.isEmpty
+    genres.text = (data["genres"] as? [String] ?? []).prefix(10).joined(separator: " · ")
+    genres.isHidden = genres.text?.isEmpty ?? true
+    readButton.isEnabled = (data["chapterCount"] as? Int ?? 0) > 0
+
+    cover.image = UIImage(systemName: "book.closed")
+    if let bytes = (data["coverBytes"] as? FlutterStandardTypedData)?.data,
+       let image = UIImage(data: bytes) {
+      cover.image = image
+      return
+    }
+    guard let name = data["cover"] as? String, let url = URL(string: name),
+          ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+    coverKey = name
+    var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad,
+                             timeoutInterval: 16)
+    for (key, value) in data["headers"] as? [String: String] ?? [:] {
+      request.setValue(value, forHTTPHeaderField: key)
+    }
+    coverRequest = URLSession.shared.dataTask(with: request) { [weak self] content, _, _ in
+      guard let content, let img = UIImage(data: content) else { return }
+      DispatchQueue.main.async {
+        guard let self, self.coverKey == name else { return }
+        self.cover.image = img
+      }
+    }
+    coverRequest?.resume()
+  }
+  @objc private func readTapped() { onRead?() }
+}
