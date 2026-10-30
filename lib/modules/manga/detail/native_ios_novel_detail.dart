@@ -31,6 +31,9 @@ class NativeIosNovelDetail extends ConsumerStatefulWidget {
 }
 
 class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
+  // UI snapshots only, not a second data store: all operations still read
+  // from the original repositories and the live Isar stream.
+  static final Map<int, Map<String, Object?>> _lastPayloadByManga = {};
   MethodChannel? _channel;
   Manga? _manga;
   Map<String, Object?> _payload = {
@@ -41,7 +44,16 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
   @override
   void initState() {
     super.initState();
-    unawaited(_refresh(initial: true));
+    // Restore the last known UIKit state before the asynchronous Isar stream
+    // emits. Returning from the reader must not display "Loading novel…".
+    _payload = _lastPayloadByManga[widget.mangaId] ??
+        {'title': 'Loading novel…', 'chapters': <Object>[]};
+    final local = mangaRepository.findById(widget.mangaId);
+    if (local != null && !local.chapters.isLoaded) local.chapters.loadSync();
+    // Only query the remote source when this work has not been populated.
+    if (local == null || local.chapters.isEmpty) {
+      unawaited(_refresh(initial: true));
+    }
   }
 
   Future<void> _refresh({required bool initial}) async {
@@ -156,9 +168,14 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
 
   @override
   Widget build(BuildContext context) {
-    final manga = ref.watch(getMangaDetailStreamProvider(
+    // The repository has the cached novel synchronously. Riverpod streams may
+    // still be loading after a reader pop; never replace visible details with
+    // a blank loading screen during that interval.
+    final streamed = ref.watch(getMangaDetailStreamProvider(
       mangaId: widget.mangaId,
     )).asData?.value;
+    final manga = streamed ?? mangaRepository.findById(widget.mangaId);
+    if (manga != null && !manga.chapters.isLoaded) manga.chapters.loadSync();
     if (manga != null && manga.itemType != ItemType.novel) {
       return MangaReaderDetail(mangaId: widget.mangaId);
     }
@@ -208,6 +225,7 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
               },
         ],
       };
+      _lastPayloadByManga[widget.mangaId] = _payload;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _channel != null) {
