@@ -18,6 +18,7 @@ import 'package:mangayomi/modules/browse/extension/extension_detail.dart';
 import 'package:mangayomi/modules/browse/extension/native_ios_extension_detail.dart';
 import 'package:mangayomi/modules/browse/extension/widgets/create_extension.dart';
 import 'package:mangayomi/modules/browse/sources/sources_filter_screen.dart';
+import 'package:mangayomi/modules/browse/sources/native_ios_source_filter.dart';
 import 'package:mangayomi/modules/calendar/calendar_screen.dart';
 import 'package:mangayomi/modules/manga/detail/widgets/migrate_screen.dart';
 import 'package:mangayomi/modules/mass_migration/mass_migration_source_selection_screen.dart';
@@ -286,7 +287,10 @@ class RouterNotifier extends ChangeNotifier {
           ? const NativeIosServiceSettings(mode: 'sync') : const SyncScreen()),
     _genericRoute<ItemType>(
       name: "sourceFilter",
-      builder: (itemType) => SourcesFilterScreen(itemType: itemType),
+      builder: (itemType) => defaultTargetPlatform == TargetPlatform.iOS &&
+              itemType == ItemType.novel
+          ? NativeIosSourceFilter(itemType: itemType)
+          : SourcesFilterScreen(itemType: itemType),
     ),
     _genericRoute(name: "downloadQueue",
       child: defaultTargetPlatform == TargetPlatform.iOS
