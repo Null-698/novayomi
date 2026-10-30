@@ -12,6 +12,7 @@ import 'package:mangayomi/modules/more/settings/browse/providers/browse_state_pr
 import 'package:mangayomi/repositories/source_repository.dart';
 import 'package:mangayomi/services/get_popular.dart';
 import 'package:mangayomi/services/search.dart';
+import 'package:mangayomi/utils/headers.dart';
 
 /// Native global-search presentation. The original isolate-backed per-source
 /// search engine remains authoritative; requests run three at a time.
@@ -167,6 +168,15 @@ class _NativeIosGlobalSearchState extends ConsumerState<NativeIosGlobalSearch> {
   @override
   Widget build(BuildContext context) {
     final sources = _sources;
+    final coverHeaders = <int, Map<String, String>>{
+      for (final source in sources)
+        if (source.id != null && source.name != 'local')
+          source.id!: ref.watch(headersProvider(
+            source: source.name ?? '',
+            lang: source.lang ?? '',
+            sourceId: source.id,
+          )),
+    };
     _snapshot = {
       'title': 'Global Search',
       'globalMode': true,
@@ -179,6 +189,8 @@ class _NativeIosGlobalSearchState extends ConsumerState<NativeIosGlobalSearch> {
             'title': novel.name ?? 'Novel',
             'description': novel.author ?? novel.description ?? '',
             'source': source.name ?? 'Unknown source',
+            'cover': novel.imageUrl ?? '',
+            'headers': coverHeaders[source.id] ?? <String, String>{},
           },
       ],
       if (sources.isEmpty) 'emptyMessage':
