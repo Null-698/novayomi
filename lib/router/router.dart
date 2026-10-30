@@ -24,6 +24,7 @@ import 'package:mangayomi/modules/manga/detail/widgets/recommendation_screen.dar
 import 'package:mangayomi/modules/manga/detail/widgets/related_screen.dart';
 import 'package:mangayomi/modules/more/data_and_storage/create_backup.dart';
 import 'package:mangayomi/modules/more/data_and_storage/data_and_storage.dart';
+import 'package:mangayomi/modules/more/data_and_storage/native_ios_data_storage.dart';
 import 'package:mangayomi/modules/more/settings/appearance/custom_navigation_settings.dart';
 import 'package:mangayomi/modules/more/settings/browse/source_repositories.dart';
 import 'package:mangayomi/modules/more/settings/browse/native_ios_source_repositories.dart';
@@ -322,7 +323,9 @@ class RouterNotifier extends ChangeNotifier {
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosPreferencesScreen(section: 'downloads')
           : const DownloadsScreen()),
-    _genericRoute(name: "dataAndStorage", child: const DataAndStorage()),
+    _genericRoute(name: "dataAndStorage",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosDataStorage() : const DataAndStorage()),
     _genericRoute(name: "security",
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosPreferencesScreen(section: 'security')
@@ -344,7 +347,10 @@ class RouterNotifier extends ChangeNotifier {
       name: "createExtension",
       builder: (source) => CreateExtension(editSource: source),
     ),
-    _genericRoute(name: "createBackup", child: const CreateBackup()),
+    _genericRoute(name: "createBackup",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosDataStorage(createBackup: true)
+          : const CreateBackup()),
     _genericRoute(
       name: "customNavigationSettings",
       child: const CustomNavigationSettings(),
