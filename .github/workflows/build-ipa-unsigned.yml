@@ -68,6 +68,7 @@ jobs:
             lib/modules/more/data_and_storage/native_ios_data_storage.dart \
             lib/modules/browse/extension/native_ios_extension_detail.dart \
             lib/modules/browse/sources/native_ios_source_filter.dart \
+            lib/modules/more/settings/track/manage_trackers/native_ios_manage_trackers.dart \
             lib/modules/manga/home/native_ios_source_results.dart \
             lib/modules/library/widgets/library_dialogs.dart \
             lib/router/router.dart

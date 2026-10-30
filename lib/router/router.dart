@@ -40,6 +40,7 @@ import 'package:mangayomi/modules/more/settings/downloads/downloads_screen.dart'
 import 'package:mangayomi/modules/more/settings/sync/sync.dart';
 import 'package:mangayomi/modules/more/settings/track/track.dart';
 import 'package:mangayomi/modules/more/settings/track/manage_trackers/manage_trackers.dart';
+import 'package:mangayomi/modules/more/settings/track/manage_trackers/native_ios_manage_trackers.dart';
 import 'package:mangayomi/modules/more/settings/track/manage_trackers/tracking_detail.dart';
 import 'package:mangayomi/modules/webview/webview.dart';
 import 'package:mangayomi/modules/browse/browse_screen.dart';
@@ -341,7 +342,9 @@ class RouterNotifier extends ChangeNotifier {
       child: defaultTargetPlatform == TargetPlatform.iOS
           ? const NativeIosPreferencesScreen(section: 'security')
           : const SecurityScreen()),
-    _genericRoute(name: "manageTrackers", child: const ManageTrackersScreen()),
+    _genericRoute(name: "manageTrackers",
+      child: defaultTargetPlatform == TargetPlatform.iOS
+          ? const NativeIosManageTrackers() : const ManageTrackersScreen()),
     _genericRoute<TrackPreference>(
       name: "trackingDetail",
       builder: (trackerPref) => TrackingDetail(trackerPref: trackerPref),
