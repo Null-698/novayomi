@@ -69,7 +69,11 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
     layout collectionViewLayout: UICollectionViewLayout,
     sizeForItemAt indexPath: IndexPath) -> CGSize {
     let width = max(1, collectionView.bounds.width - sideInset * 2)
-    let columns: CGFloat = style == .novels ? (width >= 600 ? 5 : 3) : (width >= 600 ? 5 : 3)
+    // Aidoku's two-column manga covers have room to breathe on an iPhone.
+    // Sources use three compact icon columns; both adapt to iPad widths.
+    let columns: CGFloat = style == .novels
+      ? (width >= 700 ? 5 : width >= 430 ? 3 : 2)
+      : (width >= 700 ? 6 : width >= 430 ? 4 : 3)
     let itemWidth = floor((width - (columns - 1) * spacing) / columns)
     let imageHeight = style == .novels ? itemWidth * 1.43 : itemWidth
     return CGSize(width: itemWidth, height: imageHeight + (style == .novels ? 57 : 60))
@@ -101,7 +105,8 @@ private final class NovayomiPosterCell: UICollectionViewCell {
     cover.backgroundColor = .tertiarySystemFill
     cover.contentMode = .scaleAspectFill
     cover.translatesAutoresizingMaskIntoConstraints = false
-    title.font = .preferredFont(forTextStyle: .subheadline)
+    title.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+      for: .systemFont(ofSize: 14, weight: .medium))
     title.adjustsFontForContentSizeCategory = true
     title.numberOfLines = 2
     title.textAlignment = .left
