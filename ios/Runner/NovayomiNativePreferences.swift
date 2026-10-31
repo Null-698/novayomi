@@ -23,7 +23,10 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
   private let root: UIView
   private let channel: FlutterMethodChannel
   private let nav = UINavigationBar()
-  private let navigation = UINavigationItem(title: "Settings")
+  private let navigation = UINavigationItem(title: "")
+  private let largeTitle = UILabel()
+  private let titleHeader = UIView()
+  private var sectionTitle = "Settings"
   private let table = UITableView(frame: .zero, style: .insetGrouped)
   private var sections: [[String: Any]] = []
   init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger,
@@ -39,6 +42,10 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
       primaryAction: UIAction { [weak self] _ in self?.send("close") })
     navigation.leftBarButtonItem?.accessibilityLabel = "Back to Settings"
     nav.translatesAutoresizingMaskIntoConstraints = false
+    let appearance = UINavigationBarAppearance()
+    appearance.configureWithTransparentBackground()
+    nav.standardAppearance = appearance
+    nav.scrollEdgeAppearance = appearance
     nav.setItems([navigation], animated: false)
     root.addSubview(nav)
     table.translatesAutoresizingMaskIntoConstraints = false
@@ -48,6 +55,17 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
     table.dataSource = self
     table.delegate = self
     table.keyboardDismissMode = .onDrag
+    largeTitle.font = .preferredFont(forTextStyle: .largeTitle)
+    largeTitle.adjustsFontForContentSizeCategory = true
+    largeTitle.translatesAutoresizingMaskIntoConstraints = false
+    titleHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 94)
+    titleHeader.addSubview(largeTitle)
+    NSLayoutConstraint.activate([
+      largeTitle.leadingAnchor.constraint(equalTo: titleHeader.leadingAnchor, constant: 22),
+      largeTitle.trailingAnchor.constraint(equalTo: titleHeader.trailingAnchor, constant: -18),
+      largeTitle.topAnchor.constraint(equalTo: titleHeader.topAnchor, constant: 24)
+    ])
+    table.tableHeaderView = titleHeader
     root.addSubview(table)
     NSLayoutConstraint.activate([
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
@@ -76,6 +94,11 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
   }
   deinit { channel.setMethodCallHandler(nil) }
   func view() -> UIView { root }
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView === table else { return }
+    let title = scrollView.contentOffset.y > 54 ? sectionTitle : ""
+    if navigation.title != title { navigation.title = title }
+  }
 
   private func present(_ child: UIViewController) {
     guard var host = root.window?.rootViewController else { return }
@@ -86,7 +109,9 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
     channel.invokeMethod(action, arguments: arg)
   }
   private func apply(_ data: [String: Any]) {
-    navigation.title = data["title"] as? String ?? "Settings"
+    sectionTitle = data["title"] as? String ?? "Settings"
+    largeTitle.text = sectionTitle
+    navigation.title = table.contentOffset.y > 54 ? sectionTitle : ""
     sections = data["sections"] as? [[String: Any]] ?? []
     table.reloadData()
   }

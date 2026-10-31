@@ -48,7 +48,9 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
   private let root: UIView
   private let channel: FlutterMethodChannel
   private let nav = UINavigationBar()
-  private let navigation = UINavigationItem(title: "Settings")
+  private let navigation = UINavigationItem(title: "")
+  private let largeTitle = UILabel()
+  private let titleHeader = UIView()
   private let search = UISearchBar()
   private let table = UITableView(frame: .zero, style: .insetGrouped)
   private var sections: [(String, [Entry])] = []
@@ -61,6 +63,10 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
     root.backgroundColor = .systemGroupedBackground
     root.tintColor = .novayomiAccent
     nav.translatesAutoresizingMaskIntoConstraints = false
+    let appearance = UINavigationBarAppearance()
+    appearance.configureWithTransparentBackground()
+    nav.standardAppearance = appearance
+    nav.scrollEdgeAppearance = appearance
     navigation.leftBarButtonItem = UIBarButtonItem(
       image: UIImage(systemName: "chevron.backward"),
       primaryAction: UIAction { [weak self] _ in
@@ -73,7 +79,23 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
     search.placeholder = "Search settings"
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(search)
+    largeTitle.text = "Settings"
+    largeTitle.font = .preferredFont(forTextStyle: .largeTitle)
+    largeTitle.adjustsFontForContentSizeCategory = true
+    largeTitle.translatesAutoresizingMaskIntoConstraints = false
+    titleHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 148)
+    titleHeader.addSubview(largeTitle)
+    titleHeader.addSubview(search)
+    NSLayoutConstraint.activate([
+      largeTitle.topAnchor.constraint(equalTo: titleHeader.topAnchor, constant: 20),
+      largeTitle.leadingAnchor.constraint(equalTo: titleHeader.leadingAnchor, constant: 22),
+      largeTitle.trailingAnchor.constraint(equalTo: titleHeader.trailingAnchor, constant: -20),
+      search.topAnchor.constraint(equalTo: largeTitle.bottomAnchor, constant: 8),
+      search.leadingAnchor.constraint(equalTo: titleHeader.leadingAnchor, constant: 8),
+      search.trailingAnchor.constraint(equalTo: titleHeader.trailingAnchor, constant: -8),
+      search.bottomAnchor.constraint(lessThanOrEqualTo: titleHeader.bottomAnchor, constant: -4)
+    ])
+    table.tableHeaderView = titleHeader
     table.backgroundColor = .clear
     table.dataSource = self
     table.delegate = self
@@ -85,11 +107,7 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       nav.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      search.topAnchor.constraint(equalTo: nav.bottomAnchor),
-      search.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      search.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      search.heightAnchor.constraint(equalToConstant: 52),
-      table.topAnchor.constraint(equalTo: search.bottomAnchor),
+      table.topAnchor.constraint(equalTo: nav.bottomAnchor),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
@@ -97,6 +115,11 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
     filter("")
   }
   func view() -> UIView { root }
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView === table else { return }
+    let label = scrollView.contentOffset.y > 82 ? "Settings" : ""
+    if navigation.title != label { navigation.title = label }
+  }
   private func filter(_ query: String) {
     sections = groups.compactMap { section in
       let rows = section.1.filter { entry in
