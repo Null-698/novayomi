@@ -239,6 +239,8 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
       cell.configure(info, expanded: descriptionExpanded)
       cell.onRead = { [weak self] in self?.send("resume") }
       cell.onFavorite = { [weak self] in self?.send("favorite") }
+      cell.onRefresh = { [weak self] in self?.send("refresh") }
+      cell.onBrowseSource = { [weak self] in self?.send("openSource") }
       cell.onCover = { [weak self] image in
         guard let image else { return }
         let viewer = UINavigationController(rootViewController: NovayomiCoverViewer(image: image))
@@ -342,6 +344,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   var onFavorite: (() -> Void)?
   var onCover: ((UIImage?) -> Void)?
   var onExpand: (() -> Void)?
+  var onRefresh: (() -> Void)?
+  var onBrowseSource: (() -> Void)?
   private let cover = UIImageView()
   private let heading = UILabel()
   private let detail = UILabel()
@@ -353,6 +357,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   private let expandButton = UIButton(type: .system)
   private let readButton = UIButton(type: .system)
   private let favoriteButton = UIButton(type: .system)
+  private let updatesButton = UIButton(type: .system)
+  private let sourceButton = UIButton(type: .system)
   private var coverRequest: URLSessionDataTask?
   private var coverKey: String = ""
 
@@ -412,33 +418,48 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     expandButton.addTarget(self, action: #selector(expandTapped), for: .touchUpInside)
     readButton.configuration = .filled()
     readButton.configuration?.cornerStyle = .large
+    readButton.configuration?.baseBackgroundColor = .novayomiAccent
     readButton.setTitle("Continue reading", for: .normal)
     readButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     readButton.addTarget(self, action: #selector(readTapped), for: .touchUpInside)
-    var favoriteConfig = UIButton.Configuration.tinted()
-    favoriteConfig.cornerStyle = .large
+    var favoriteConfig = UIButton.Configuration.filled()
+    favoriteConfig.baseBackgroundColor = .novayomiAccent
+    favoriteConfig.cornerStyle = .medium
     favoriteButton.configuration = favoriteConfig
     favoriteButton.accessibilityLabel = "Add or remove from Library"
-    favoriteButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
-    favoriteButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    favoriteButton.widthAnchor.constraint(equalToConstant: 48).isActive = true
+    favoriteButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
     favoriteButton.addTarget(self, action: #selector(favoriteTapped), for: .touchUpInside)
+    for button in [updatesButton, sourceButton] {
+      var config = UIButton.Configuration.tinted()
+      config.cornerStyle = .medium
+      button.configuration = config
+      button.widthAnchor.constraint(equalToConstant: 48).isActive = true
+      button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+    }
+    updatesButton.setImage(UIImage(systemName: "arrow.clockwise"), for: .normal)
+    updatesButton.accessibilityLabel = "Refresh novel chapters"
+    updatesButton.addTarget(self, action: #selector(refreshTapped), for: .touchUpInside)
+    sourceButton.setImage(UIImage(systemName: "safari"), for: .normal)
+    sourceButton.accessibilityLabel = "Browse source"
+    sourceButton.addTarget(self, action: #selector(sourceTapped), for: .touchUpInside)
 
     let tagRow = UIStackView(arrangedSubviews: [statusPill, sourcePill])
     tagRow.axis = .horizontal
     tagRow.alignment = .leading
     tagRow.spacing = 6
-    let right = UIStackView(arrangedSubviews: [heading, detail, tagRow])
+    let actions = UIStackView(arrangedSubviews: [favoriteButton, updatesButton, sourceButton])
+    actions.axis = .horizontal
+    actions.spacing = 7
+    let right = UIStackView(arrangedSubviews: [heading, detail, tagRow, actions])
     right.axis = .vertical
     right.spacing = 9
     right.alignment = .leading
     let row = UIStackView(arrangedSubviews: [cover, right])
     row.axis = .horizontal
-    row.alignment = .top
+    row.alignment = .center
     row.spacing = 14
-    let actions = UIStackView(arrangedSubviews: [favoriteButton, readButton])
-    actions.axis = .horizontal
-    actions.spacing = 10
-    let column = UIStackView(arrangedSubviews: [row, actions, descriptionLabel, expandButton, genreScroll])
+    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genreScroll, readButton])
     column.axis = .vertical
     column.spacing = 12
     column.translatesAutoresizingMaskIntoConstraints = false
@@ -460,6 +481,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     cover.image = UIImage(systemName: "book.closed")
     onRead = nil
     onFavorite = nil
+    onRefresh = nil
+    onBrowseSource = nil
     onCover = nil
     onExpand = nil
   }
@@ -505,9 +528,14 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     let inLibrary = data["favorite"] as? Bool ?? false
     favoriteButton.setImage(UIImage(systemName: inLibrary ? "bookmark.fill" : "bookmark"), for: .normal)
     favoriteButton.accessibilityLabel = inLibrary ? "Remove from Library" : "Add to Library"
-    readButton.setTitle(data["readChapterId"] == nil ? "Start reading" : "Continue reading",
-                        for: .normal)
-    readButton.isEnabled = (data["chapterCount"] as? Int ?? 0) > 0
+    let chapters = data["chapterCount"] as? Int ?? 0
+    let allRead = data["allRead"] as? Bool ?? false
+    readButton.setTitle(chapters == 0 ? "No chapters" :
+      allRead ? "All Chapters Read" :
+      data["readChapterId"] == nil ? "Start reading" : "Continue reading",
+      for: .normal)
+    readButton.isEnabled = chapters > 0
+    sourceButton.isHidden = !(data["canOpenSource"] as? Bool ?? false)
 
     cover.image = UIImage(systemName: "book.closed")
     if let bytes = (data["coverBytes"] as? FlutterStandardTypedData)?.data,
@@ -534,6 +562,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   }
   @objc private func readTapped() { onRead?() }
   @objc private func favoriteTapped() { onFavorite?() }
+  @objc private func refreshTapped() { onRefresh?() }
+  @objc private func sourceTapped() { onBrowseSource?() }
   @objc private func coverTapped() { onCover?(cover.image) }
   @objc private func expandTapped() { onExpand?() }
 }
