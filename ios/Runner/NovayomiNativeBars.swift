@@ -34,6 +34,7 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
   private let channel: FlutterMethodChannel
   private let kind: String
   private var tabs: UITabBar?
+  private var tabSearch: UIButton?
   private var navigation: UINavigationBar?
   private var readerTop: NovayomiReaderTopView?
   private var toolbar: UIToolbar?
@@ -57,8 +58,64 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
       let control = UITabBar(frame: .zero)
       control.delegate = self
       control.isTranslucent = true
+      control.tintColor = .novayomiAccent
+      control.unselectedItemTintColor = .label
+      let appearance = UITabBarAppearance()
+      appearance.configureWithTransparentBackground()
+      control.standardAppearance = appearance
+      control.scrollEdgeAppearance = appearance
+
+      // iOS system glass, not a Flutter shader. The separate search capsule
+      // follows the current Aidoku floating tab arrangement.
+      let strip: UIVisualEffectView
+      let searchGlass: UIVisualEffectView
+      if #available(iOS 26.0, *) {
+        strip = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+        searchGlass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+        strip.cornerConfiguration = .capsule()
+        searchGlass.cornerConfiguration = .capsule()
+      } else {
+        strip = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        searchGlass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        strip.layer.cornerRadius = 30
+        searchGlass.layer.cornerRadius = 30
+        strip.clipsToBounds = true
+        searchGlass.clipsToBounds = true
+      }
+      control.translatesAutoresizingMaskIntoConstraints = false
+      strip.translatesAutoresizingMaskIntoConstraints = false
+      searchGlass.translatesAutoresizingMaskIntoConstraints = false
+      container.addSubview(strip)
+      container.addSubview(searchGlass)
+      strip.contentView.addSubview(control)
+      let search = UIButton(type: .system)
+      search.setImage(UIImage(systemName: "magnifyingglass", withConfiguration:
+        UIImage.SymbolConfiguration(pointSize: 23, weight: .medium)), for: .normal)
+      search.tintColor = .label
+      search.accessibilityLabel = "Search all novels"
+      search.addTarget(self, action: #selector(searchPressed), for: .touchUpInside)
+      search.translatesAutoresizingMaskIntoConstraints = false
+      searchGlass.contentView.addSubview(search)
+      NSLayoutConstraint.activate([
+        strip.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
+        strip.trailingAnchor.constraint(equalTo: searchGlass.leadingAnchor, constant: -9),
+        strip.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
+        strip.heightAnchor.constraint(equalToConstant: 58),
+        searchGlass.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+        searchGlass.centerYAnchor.constraint(equalTo: strip.centerYAnchor),
+        searchGlass.widthAnchor.constraint(equalToConstant: 58),
+        searchGlass.heightAnchor.constraint(equalToConstant: 58),
+        control.leadingAnchor.constraint(equalTo: strip.contentView.leadingAnchor),
+        control.trailingAnchor.constraint(equalTo: strip.contentView.trailingAnchor),
+        control.topAnchor.constraint(equalTo: strip.contentView.topAnchor),
+        control.bottomAnchor.constraint(equalTo: strip.contentView.bottomAnchor),
+        search.leadingAnchor.constraint(equalTo: searchGlass.contentView.leadingAnchor),
+        search.trailingAnchor.constraint(equalTo: searchGlass.contentView.trailingAnchor),
+        search.topAnchor.constraint(equalTo: searchGlass.contentView.topAnchor),
+        search.bottomAnchor.constraint(equalTo: searchGlass.contentView.bottomAnchor)
+      ])
       tabs = control
-      mount(control)
+      tabSearch = search
     case "readerTop":
       let control = NovayomiReaderTopView(frame: .zero)
       control.onAction = { [weak self] action in self?.emit(action) }
@@ -245,6 +302,7 @@ private final class NovayomiNativeBar: NSObject, FlutterPlatformView, UITabBarDe
     channel.invokeMethod("select", arguments: item.tag)
   }
 
+  @objc private func searchPressed() { emit("search") }
   @objc private func backPressed() { emit("back") }
   @objc private func bookmarkPressed() { emit("bookmark") }
   @objc private func readerAction(_ sender: UIBarButtonItem) {
