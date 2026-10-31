@@ -449,24 +449,40 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
     }
   }
 
-  Future<void> _closeFromNative() async {
+  void _closeFromNative() {
     if (_closing) return;
     _closing = true;
+
+    // Commit the visible position immediately, then persist history on the
+    // existing Dart repository without blocking native navigation.
+    // setHistoryUpdate retains its chapter while asynchronous writes finish.
     try {
-      await VolumeKeys.disable();
-      await _persistChapter();
-    } finally {
-      if (mounted) {
-        Navigator.of(context).pop();
-        // Allow the retained novel-details frame to render before revealing it.
-        await WidgetsBinding.instance.endOfFrame;
-      }
-      try {
-        await _channel.invokeMethod<void>('finishClose');
-      } catch (error) {
-        debugPrint('Unable to dismiss the native reader: $error');
-      }
+      final controller = _controller;
+      controller.setChapterOffset(_progress * 1000, 1000, true);
+      final elapsed = _readingTime.elapsed.inSeconds;
+      _readingTime.stop();
+      unawaited(controller.setHistoryUpdate(elapsedSeconds: elapsed).catchError(
+        (Object error, StackTrace stack) {
+          debugPrint('Reader history save failed: $error');
+          debugPrintStack(stackTrace: stack);
+        },
+      ));
+    } catch (error, stack) {
+      debugPrint('Reader progress save failed: $error');
+      debugPrintStack(stackTrace: stack);
     }
+
+    unawaited(VolumeKeys.disable().catchError((Object error) {
+      debugPrint('Volume key cleanup failed: $error');
+    }));
+    // Pop synchronously. Never await I/O or endOfFrame in the close path:
+    // either can keep the native reader on screen for many seconds.
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    unawaited(_channel.invokeMethod<void>('finishClose').catchError(
+      (Object error) => debugPrint('Native reader dismissal failed: $error'),
+    ));
   }
 
   @override
