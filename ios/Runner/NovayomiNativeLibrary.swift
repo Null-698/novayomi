@@ -40,6 +40,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let categoryStack = UIStackView()
   private let sortButton = UIButton(type: .system)
   private let actionsButton = UIButton(type: .system)
+  private let notificationButton = UIButton(type: .system)
   private let preferencesButton = UIButton(type: .system)
   private let layoutButton = UIButton(type: .system)
   private let refresh = UIRefreshControl()
@@ -98,6 +99,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     heading.adjustsFontForContentSizeCategory = true
     total.font = .preferredFont(forTextStyle: .footnote)
     total.textColor = .secondaryLabel
+    total.isHidden = true
 
     sortButton.setImage(UIImage(systemName: "line.3.horizontal.decrease"), for: .normal)
     sortButton.accessibilityLabel = "Sort library"
@@ -109,9 +111,17 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     layoutButton.accessibilityLabel = "Change layout"
     layoutButton.addTarget(self, action: #selector(toggleLayout), for: .touchUpInside)
 
-    actionsButton.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+    actionsButton.setImage(UIImage(systemName: "ellipsis"), for: .normal)
     actionsButton.accessibilityLabel = "Library actions"
     actionsButton.showsMenuAsPrimaryAction = true
+    notificationButton.setImage(UIImage(systemName: "bell"), for: .normal)
+    notificationButton.accessibilityLabel = "Library updates"
+    notificationButton.addTarget(self, action: #selector(openUpdates), for: .touchUpInside)
+    for button in [notificationButton, actionsButton] {
+      var config = UIButton.Configuration.tinted()
+      config.cornerStyle = .capsule
+      button.configuration = config
+    }
 
     let labels = UIStackView(arrangedSubviews: [heading, total])
     labels.axis = .vertical
@@ -131,7 +141,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     compactBar.translatesAutoresizingMaskIntoConstraints = false
     compactBar.addArrangedSubview(compactTitle)
     compactBar.addArrangedSubview(UIView())
-    for button in [preferencesButton, layoutButton, actionsButton] {
+    for button in [notificationButton, actionsButton] {
       compactBar.addArrangedSubview(button)
     }
     root.addSubview(compactBar)
@@ -143,14 +153,16 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       layoutButton.widthAnchor.constraint(equalToConstant: 44),
       layoutButton.heightAnchor.constraint(equalToConstant: 44),
       actionsButton.widthAnchor.constraint(equalToConstant: 44),
-      actionsButton.heightAnchor.constraint(equalToConstant: 44)
+      actionsButton.heightAnchor.constraint(equalToConstant: 44),
+      notificationButton.widthAnchor.constraint(equalToConstant: 44),
+      notificationButton.heightAnchor.constraint(equalToConstant: 44)
     ])
 
     search.placeholder = "Search novels"
     search.searchBarStyle = .minimal
     search.scopeButtonTitles = ["Filtered", "All"]
     search.selectedScopeButtonIndex = 0
-    search.showsScopeBar = true
+    search.showsScopeBar = false
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
     // Search and categories belong to the scrolling Library header.
@@ -418,8 +430,20 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     })
   }
 
+  @objc private func openUpdates() {
+    channel.invokeMethod("updates", arguments: nil)
+  }
+
   private func updateActionsMenu() {
     actionsButton.menu = UIMenu(children: [
+      UIAction(title: "Library layout", image: UIImage(systemName: "square.grid.2x2")) {
+        [weak self] _ in self?.toggleLayout()
+      },
+      UIAction(title: "Library preferences", image: UIImage(systemName: "slider.horizontal.3")) {
+        [weak self] _ in self?.openPreferences()
+      },
+      UIMenu(title: "Sort library", image: UIImage(systemName: "arrow.up.arrow.down"),
+        children: sortButton.menu?.children ?? []),
       UIAction(title: "Update Library", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
         self?.channel.invokeMethod("refresh", arguments: nil)
       },
@@ -886,7 +910,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       : (width > 700 ? 5 : width > 450 ? 3 : 2)
     let itemWidth = max(65, floor((width - 36 - (columns - 1) * 12) / columns))
     let labelHeight: CGFloat = 0
-    let coverHeight = displayMode == 1 ? itemWidth * 1.57 : itemWidth * 1.44
+    let coverHeight = displayMode == 1 ? itemWidth * 1.57 : itemWidth * 1.50
     return CGSize(width: itemWidth, height: coverHeight + (isList ? labelHeight : 0))
   }
 
@@ -982,7 +1006,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
       label.isHidden = true
     }
     downloadedBadge.backgroundColor = .systemTeal
-    unreadBadge.backgroundColor = .systemBlue
+    unreadBadge.backgroundColor = .novayomiAccent
     for label in [localBadge, downloadedBadge, unreadBadge] {
       topLeftBadges.addArrangedSubview(label)
     }
@@ -994,13 +1018,13 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.addSubview(sourceBadge)
     resume.setImage(UIImage(systemName: "play.fill"), for: .normal)
     resume.tintColor = .white
-    resume.backgroundColor = .systemBlue
+    resume.backgroundColor = .novayomiAccent
     resume.layer.cornerRadius = 17
     resume.accessibilityLabel = "Continue reading"
     resume.translatesAutoresizingMaskIntoConstraints = false
     resume.addTarget(self, action: #selector(resumeTapped), for: .touchUpInside)
     cover.addSubview(resume)
-    readingProgress.progressTintColor = .systemBlue
+    readingProgress.progressTintColor = .novayomiAccent
     readingProgress.trackTintColor = UIColor.secondarySystemBackground.withAlphaComponent(0.75)
     readingProgress.translatesAutoresizingMaskIntoConstraints = false
     cover.addSubview(readingProgress)
@@ -1120,7 +1144,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
       stack.alignment = .center
     } else {
       coverWidth.isActive = false
-      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.44))
+      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.50))
       stack.axis = .vertical
       stack.alignment = .fill
     }
@@ -1158,7 +1182,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
   override func layoutSubviews() {
     super.layoutSubviews()
     if stack.axis == .vertical {
-      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.44))
+      coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.50))
     }
     coverGradient.frame = cover.bounds
   }
