@@ -138,6 +138,7 @@ class _NativeIosBrowseScreenState extends ConsumerState<NativeIosBrowseScreen> {
             {
               'id': source.id,
               'name': source.name ?? 'Source',
+              'version': source.version ?? '',
               'icon': source.iconUrl ?? '',
               'lang': source.lang ?? '',
               'pinned': source.isPinned ?? false,
