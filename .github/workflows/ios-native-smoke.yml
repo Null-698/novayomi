@@ -30,6 +30,7 @@ jobs:
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/modules/novel/native_novel_reader_screen.dart \
             lib/modules/main_view/widgets/mobile_bottom_navigation.dart \
+            lib/modules/main_view/main_screen.dart \
             lib/modules/library/native_ios_novel_library.dart \
             lib/modules/manga/detail/native_ios_novel_detail.dart \
             lib/modules/more/native_ios_more_screen.dart \
