@@ -11,10 +11,11 @@
 
 ## UI/UX for now....
 
-- im rewriting UI/UX in swift
-- i will use ai to help me speed up dont like dont use it
-- it is in early alpha stages, so nothing is polished
+- im rewriting UI/UX in swift.
+- i will use ai to help me speed up dont like dont use it.
+- it is in early alpha stages, so nothing is polished.
 - YES this will only focus on novel side eveything other than novel will be removed anime,manga etc.
+- and yes this will only be for iOS so no macos, ipados, windows or linux.
 
 ## Features
 
