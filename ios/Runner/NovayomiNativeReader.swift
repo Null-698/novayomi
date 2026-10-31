@@ -69,6 +69,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = readerBackground()
+    view.tintColor = .novayomiAccent
     webView.backgroundColor = readerBackground()
     webView.isOpaque = false
     webView.navigationDelegate = self
@@ -256,7 +257,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     p { margin: 0 0 \(paragraphSpace)px; } img,video { max-width:100%; height:auto; }
     pre { white-space:pre-wrap; } table { max-width:100%; overflow:auto; }
     blockquote { border-left:3px solid currentColor; padding-left:12px; opacity:0.9; }
-    a { color: #3b8eea; }
+    a { color: #ff3b63; }
     \(modeStyle)
     </style></head><body><main id="book">\(safeString("html", fallback: ""))</main></body></html>
     """
@@ -1711,7 +1712,7 @@ private final class NovayomiReaderControls: UIView {
     layoutButton.setImage(UIImage(systemName: symbol), for: .normal)
     layoutButton.accessibilityValue = mode == "scroll" ? "Continuous scrolling" :
       pageLayout == "double" ? "Double-page" : "Single-page"
-    speechButton.tintColor = speaking ? .systemBlue : .label
+    speechButton.tintColor = speaking ? .novayomiAccent : .label
     speechButton.accessibilityLabel = speaking ? "Stop reading aloud" : "Read aloud"
   }
 
