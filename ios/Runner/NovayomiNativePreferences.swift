@@ -119,6 +119,24 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
       }
       return sliderCell
     }
+    if kind == "theme" {
+      let themed = tableView.dequeueReusableCell(withIdentifier: "native-theme")
+        as? NovayomiPreferenceThemeCell
+        ?? NovayomiPreferenceThemeCell(style: .default, reuseIdentifier: "native-theme")
+      themed.configure(value: data["value"] as? String ?? "dark") { [weak self] theme in
+        self?.send("change", ["id": id, "value": theme])
+      }
+      return themed
+    }
+    if kind == "alignment" {
+      let aligned = tableView.dequeueReusableCell(withIdentifier: "native-alignment")
+        as? NovayomiPreferenceAlignmentCell
+        ?? NovayomiPreferenceAlignmentCell(style: .default, reuseIdentifier: "native-alignment")
+      aligned.configure(value: data["value"] as? String ?? "left") { [weak self] value in
+        self?.send("change", ["id": id, "value": value])
+      }
+      return aligned
+    }
     let destructive = data["destructive"] as? Bool ?? false
     var content = cell.defaultContentConfiguration()
     content.text = data["title"] as? String ?? id
@@ -327,5 +345,118 @@ private final class NovayomiPreferenceSliderCell: UITableViewCell {
     slider.value = snappedValue
     updateValueText()
     onCommit?(Double(snappedValue))
+  }
+}
+
+
+/// Four native UIKit theme swatches, retaining the original Flutter palettes.
+private final class NovayomiPreferenceThemeCell: UITableViewCell {
+  private let heading = UILabel()
+  private let stack = UIStackView()
+  private var choose: ((String) -> Void)?
+
+  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+    super.init(style: style, reuseIdentifier: reuseIdentifier)
+    selectionStyle = .none
+    heading.text = "Theme"
+    heading.font = .preferredFont(forTextStyle: .body)
+    heading.adjustsFontForContentSizeCategory = true
+    stack.axis = .horizontal
+    stack.distribution = .fillEqually
+    stack.spacing = 8
+    for view in [heading, stack] {
+      view.translatesAutoresizingMaskIntoConstraints = false
+      contentView.addSubview(view)
+    }
+    NSLayoutConstraint.activate([
+      heading.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      heading.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      heading.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      stack.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 12),
+      stack.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      stack.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
+      stack.heightAnchor.constraint(equalToConstant: 88)
+    ])
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  func configure(value: String, onSelect: @escaping (String) -> Void) {
+    choose = onSelect
+    for subview in stack.arrangedSubviews {
+      stack.removeArrangedSubview(subview)
+      subview.removeFromSuperview()
+    }
+    let palettes: [(String, String, UIColor, UIColor)] = [
+      ("dark", "Dark", UIColor(red: 41/255, green: 40/255, blue: 50/255, alpha: 1),
+       UIColor(red: 204/255, green: 204/255, blue: 204/255, alpha: 1)),
+      ("light", "Light", .white, .black),
+      ("black", "Black", .black, .white),
+      ("sepia", "Sepia", UIColor(red: 245/255, green: 230/255, blue: 211/255, alpha: 1),
+       UIColor(red: 95/255, green: 75/255, blue: 50/255, alpha: 1))
+    ]
+    for (id, name, background, foreground) in palettes {
+      let control = UIButton(type: .custom)
+      control.backgroundColor = background
+      control.layer.cornerRadius = 12
+      control.layer.borderWidth = id == value ? 3 : 1
+      control.layer.borderColor = id == value ? tintColor.cgColor : UIColor.separator.cgColor
+      control.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+      control.titleLabel?.numberOfLines = 2
+      control.titleLabel?.textAlignment = .center
+      control.setTitle("Aa\n" + name, for: .normal)
+      control.setTitleColor(foreground, for: .normal)
+      control.accessibilityLabel = name + " reader theme"
+      control.accessibilityTraits = id == value ? [.button, .selected] : .button
+      control.addAction(UIAction { [weak self] _ in self?.choose?(id) },
+                        for: .touchUpInside)
+      stack.addArrangedSubview(control)
+    }
+  }
+}
+
+/// Native segmented four-way alignment, rather than a text menu.
+private final class NovayomiPreferenceAlignmentCell: UITableViewCell {
+  private let heading = UILabel()
+  private let segments = UISegmentedControl(items: [
+    UIImage(systemName: "text.alignleft") ?? UIImage(),
+    UIImage(systemName: "text.aligncenter") ?? UIImage(),
+    UIImage(systemName: "text.alignright") ?? UIImage(),
+    UIImage(systemName: "text.justify") ?? UIImage()
+  ])
+  private let values = ["left", "center", "right", "block"]
+  private var choose: ((String) -> Void)?
+
+  override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+    super.init(style: style, reuseIdentifier: reuseIdentifier)
+    selectionStyle = .none
+    heading.text = "Text alignment"
+    heading.font = .preferredFont(forTextStyle: .body)
+    heading.adjustsFontForContentSizeCategory = true
+    for view in [heading, segments] {
+      view.translatesAutoresizingMaskIntoConstraints = false
+      contentView.addSubview(view)
+    }
+    segments.addTarget(self, action: #selector(changed), for: .valueChanged)
+    NSLayoutConstraint.activate([
+      heading.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      heading.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      heading.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      segments.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 12),
+      segments.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+      segments.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+      segments.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -14),
+      segments.heightAnchor.constraint(greaterThanOrEqualToConstant: 34)
+    ])
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+  func configure(value: String, onSelect: @escaping (String) -> Void) {
+    choose = onSelect
+    segments.selectedSegmentIndex = values.firstIndex(of: value) ?? 0
+    segments.accessibilityLabel = "Text alignment"
+  }
+  @objc private func changed() {
+    guard values.indices.contains(segments.selectedSegmentIndex) else { return }
+    choose?(values[segments.selectedSegmentIndex])
   }
 }
