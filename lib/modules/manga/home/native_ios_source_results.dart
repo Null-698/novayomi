@@ -27,7 +27,9 @@ class NativeIosSourceResults extends ConsumerStatefulWidget {
 class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults> {
   MethodChannel? _channel;
   final _items = <MManga>[];
-  late int _mode = widget.isLatest ? 1 : 0;
+  final _featured = <MManga>[];
+  // Home uses both existing Popular and Latest providers; Ranking is Popular.
+  late int _mode = widget.isLatest ? 1 : 2;
   String _query = '';
   int _page = 0;
   bool _hasMore = true;
@@ -100,6 +102,7 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
       _page = 0;
       _hasMore = true;
       _items.clear();
+      _featured.clear();
     }
     if (mounted) setState(() {});
     try {
@@ -112,6 +115,23 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
           source: widget.source, query: _query,
           page: page, filterList: _filters!,
         ).future);
+      } else if (_mode == 2) {
+        if (page == 1) {
+          // Keep the source engine unchanged; render the two existing
+          // endpoints as Aidoku's Home/Trending and Latest Updates sections.
+          final results = await Future.wait<MPages?>([
+            ref.read(getPopularProvider(source: widget.source, page: 1).future),
+            ref.read(getLatestUpdatesProvider(source: widget.source, page: 1).future),
+          ]);
+          if (!mounted) return;
+          _featured.addAll(results[0]?.list ?? <MManga>[]);
+          _items.addAll(_featured);
+          result = results[1];
+        } else {
+          result = await ref.read(getLatestUpdatesProvider(
+            source: widget.source, page: page,
+          ).future);
+        }
       } else if (_mode == 1) {
         result = await ref.read(getLatestUpdatesProvider(
           source: widget.source, page: page,
@@ -148,6 +168,18 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
       'title': widget.source.name ?? 'Source',
       'loading': _busy,
       'hasMore': _hasMore,
+      'homeMode': _mode == 2 && _query.isEmpty,
+      'latestOnly': _mode == 1 && _query.isEmpty,
+      'featured': <Map<String, Object?>>[
+        for (final novel in _featured)
+          {
+            'title': novel.name ?? 'Novel',
+            'description': novel.author ?? '',
+            'cover': novel.imageUrl ?? '',
+            'headers': headers,
+          },
+      ],
+      'featuredCount': _featured.length,
       'items': <Map<String, Object?>>[
         for (final novel in _items)
           {
