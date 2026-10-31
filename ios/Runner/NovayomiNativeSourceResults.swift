@@ -123,6 +123,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     grid.translatesAutoresizingMaskIntoConstraints = false
     grid.onSelect = { [weak self] i in self?.selectItem(i) }
     grid.onRefresh = { [weak self] in self?.send("refresh") }
+    grid.reserveBottomSpace(106)
     root.addSubview(grid)
     let floatingTabs = NovayomiDetailTabOverlay(selected: 1) {
       [weak self] target in self?.send("tab", target)
