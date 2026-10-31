@@ -116,12 +116,19 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     table.translatesAutoresizingMaskIntoConstraints = false
     refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
     table.refreshControl = refresh
+    table.contentInset.bottom = 96
+    table.verticalScrollIndicatorInsets.bottom = 96
     root.addSubview(table)
     configureHomeHeader(frame: frame)
     grid.translatesAutoresizingMaskIntoConstraints = false
     grid.onSelect = { [weak self] i in self?.selectItem(i) }
     grid.onRefresh = { [weak self] in self?.send("refresh") }
     root.addSubview(grid)
+    let floatingTabs = NovayomiDetailTabOverlay(selected: 1) {
+      [weak self] target in self?.send("tab", target)
+    }
+    floatingTabs.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(floatingTabs)
     NSLayoutConstraint.activate([
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
@@ -142,7 +149,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       grid.topAnchor.constraint(equalTo: table.topAnchor),
       grid.leadingAnchor.constraint(equalTo: table.leadingAnchor),
       grid.trailingAnchor.constraint(equalTo: table.trailingAnchor),
-      grid.bottomAnchor.constraint(equalTo: table.bottomAnchor)
+      grid.bottomAnchor.constraint(equalTo: table.bottomAnchor),
+      floatingTabs.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+      floatingTabs.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
+      floatingTabs.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -5),
+      floatingTabs.heightAnchor.constraint(equalToConstant: 58)
     ])
     searchHeight = search.heightAnchor.constraint(equalToConstant: 0)
     searchHeight.isActive = true
