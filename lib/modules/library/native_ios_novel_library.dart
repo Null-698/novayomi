@@ -96,6 +96,8 @@ class _NativeIosNovelLibraryState extends ConsumerState<NativeIosNovelLibrary> {
         }
       case 'browse':
         context.go('/browse');
+      case 'updates':
+        context.go('/updates');
       case 'open':
         final id = call.arguments;
         if (id is! int) return;
