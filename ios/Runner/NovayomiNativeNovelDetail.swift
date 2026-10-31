@@ -130,7 +130,10 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     chapters = data["chapters"] as? [[String: Any]] ?? []
     favorite = data["favorite"] as? Bool ?? false
     readChapterId = data["readChapterId"] as? Int
-    navItem.title = data["title"] as? String ?? "Novel"
+    // The cover is the large-title presentation. Show the compact title
+    // only after it scrolls offscreen, like a native details navigation stack.
+    navItem.title = table.contentOffset.y > 130
+      ? (data["title"] as? String ?? "Novel") : ""
     navItem.rightBarButtonItems = [
       UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"),
         menu: UIMenu(children: [
@@ -177,6 +180,12 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     searchBar.resignFirstResponder()
   }
 
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView === table else { return }
+    let title = info["title"] as? String ?? "Novel"
+    let compact = scrollView.contentOffset.y > 130 ? title : ""
+    if navItem.title != compact { navItem.title = compact }
+  }
   @objc private func refreshRequested() { send("refresh") }
   @objc private func handleBackSwipe(_ sender: UIScreenEdgePanGestureRecognizer) {
     guard sender.state == .ended,
@@ -338,6 +347,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   private let cover = UIImageView()
   private let heading = UILabel()
   private let detail = UILabel()
+  private let sourcePill = UIButton(type: .system)
+  private let statusPill = UIButton(type: .system)
   private let descriptionLabel = UILabel()
   private let genreScroll = UIScrollView()
   private let genreStack = UIStackView()
@@ -359,16 +370,25 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     cover.accessibilityLabel = "Show full-size novel cover"
     cover.backgroundColor = .secondarySystemGroupedBackground
     cover.translatesAutoresizingMaskIntoConstraints = false
-    cover.widthAnchor.constraint(equalToConstant: 112).isActive = true
-    cover.heightAnchor.constraint(equalToConstant: 164).isActive = true
+    cover.widthAnchor.constraint(equalToConstant: 130).isActive = true
+    cover.heightAnchor.constraint(equalToConstant: 190).isActive = true
 
-    heading.font = .preferredFont(forTextStyle: .title2)
-    heading.font = .systemFont(ofSize: 25, weight: .bold)
+    heading.font = UIFontMetrics(forTextStyle: .title2).scaledFont(
+      for: .systemFont(ofSize: 23, weight: .bold))
     heading.numberOfLines = 3
     heading.adjustsFontForContentSizeCategory = true
     detail.font = .preferredFont(forTextStyle: .subheadline)
     detail.textColor = .secondaryLabel
-    detail.numberOfLines = 3
+    detail.numberOfLines = 2
+    for pill in [sourcePill, statusPill] {
+      var configuration = UIButton.Configuration.gray()
+      configuration.cornerStyle = .capsule
+      configuration.contentInsets = NSDirectionalEdgeInsets(
+        top: 4, leading: 11, bottom: 4, trailing: 11)
+      pill.configuration = configuration
+      pill.isUserInteractionEnabled = false
+      pill.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+    }
     descriptionLabel.font = .preferredFont(forTextStyle: .body)
     descriptionLabel.numberOfLines = 0
     descriptionLabel.adjustsFontForContentSizeCategory = true
@@ -397,9 +417,13 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     readButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     readButton.addTarget(self, action: #selector(readTapped), for: .touchUpInside)
 
-    let right = UIStackView(arrangedSubviews: [heading, detail])
+    let tagRow = UIStackView(arrangedSubviews: [statusPill, sourcePill])
+    tagRow.axis = .horizontal
+    tagRow.alignment = .leading
+    tagRow.spacing = 6
+    let right = UIStackView(arrangedSubviews: [heading, detail, tagRow])
     right.axis = .vertical
-    right.spacing = 12
+    right.spacing = 9
     right.alignment = .leading
     let row = UIStackView(arrangedSubviews: [cover, right])
     row.axis = .horizontal
@@ -407,7 +431,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     row.spacing = 14
     let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genreScroll, readButton])
     column.axis = .vertical
-    column.spacing = 14
+    column.spacing = 12
     column.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(column)
     NSLayoutConstraint.activate([
@@ -432,19 +456,20 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
 
   func configure(_ data: [String: Any], expanded: Bool) {
     heading.text = data["title"] as? String ?? "Untitled"
-    let info = [
-      data["author"] as? String ?? "",
-      data["status"] as? String ?? "",
-      data["source"] as? String ?? ""
-    ].filter { !$0.isEmpty }
-    detail.text = info.joined(separator: "\n")
+    detail.text = data["author"] as? String ?? ""
+    let source = data["source"] as? String ?? ""
+    let status = data["status"] as? String ?? ""
+    sourcePill.isHidden = source.isEmpty
+    sourcePill.setTitle(source, for: .normal)
+    statusPill.isHidden = status.isEmpty
+    statusPill.setTitle(status, for: .normal)
     let html = data["description"] as? String ?? ""
     let plain = html.replacingOccurrences(of: "<[^>]+>", with: " ",
        options: .regularExpression)
       .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
       .trimmingCharacters(in: .whitespacesAndNewlines)
     descriptionLabel.text = plain
-    descriptionLabel.numberOfLines = expanded ? 0 : 4
+    descriptionLabel.numberOfLines = expanded ? 0 : 3
     descriptionLabel.isHidden = plain.isEmpty
     expandButton.isHidden = plain.count < 180
     expandButton.setTitle(expanded ? "Show less" : "Show more", for: .normal)
