@@ -111,9 +111,9 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     backSwipe.delegate = self
     view.addGestureRecognizer(backSwipe)
 
-    // Mirror NovelBottomBar: [Previous | progress slider | Next], a separator,
-    // then [Chapters | Font size | Layout | TTS | Settings]. This is one
-    // native UIKit glass panel; do not squeeze the slider into UIToolbar.
+    // Aidoku-style native reader chrome: compact progress glass at the bottom;
+    // chapter list, typography and actions live in the navigation bar.
+    // Novel controls retain their existing native actions and Dart settings.
     progressControl.minimumValue = 0
     progressControl.maximumValue = 1
     progressControl.value = Float(currentProgress)
@@ -135,7 +135,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       readerControls.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 8),
       readerControls.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -8),
       readerControls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
-      readerControls.heightAnchor.constraint(equalToConstant: 124)
+      readerControls.heightAnchor.constraint(equalToConstant: 72)
     ])
     updatePercentLabel()
 
@@ -170,9 +170,8 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     // The inset is fixed for the entire chapter. It does not change when
     // chrome hides, status-bar visibility changes, or a drag is in progress.
     let top = max(110, view.window?.safeAreaInsets.top ?? 0)
-    // Reserve room for the original two-row reader chrome without constantly
-    // readjusting scroll offsets during gestures.
-    let bottom = max(146, (view.window?.safeAreaInsets.bottom ?? 0) + 130)
+    // Reserve only the compact native progress bar and its safe-area space.
+    let bottom = max(100, (view.window?.safeAreaInsets.bottom ?? 0) + 74)
     contentInsets = UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0)
     webView.scrollView.contentInset = contentInsets
     webView.scrollView.scrollIndicatorInsets = contentInsets
@@ -454,15 +453,39 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     ])
     navigationItem.titleView = titleGlass
 
-    navigationItem.leftBarButtonItem = UIBarButtonItem(
-      image: UIImage(systemName: "chevron.backward"),
+    let closeItem = UIBarButtonItem(
+      image: UIImage(systemName: "xmark"),
       style: .plain, target: self, action: #selector(closeReader))
-    navigationItem.leftBarButtonItem?.accessibilityLabel = "Return to novel details"
-    let bookmarkItem = UIBarButtonItem(
-      image: UIImage(systemName: bookmarked ? "bookmark.fill" : "bookmark"),
-      style: .plain, target: self, action: #selector(toggleBookmark))
-    bookmarkItem.accessibilityLabel = bookmarked ? "Remove bookmark" : "Bookmark"
-    navigationItem.rightBarButtonItems = [bookmarkItem]
+    closeItem.accessibilityLabel = "Return to novel details"
+    let chaptersItem = UIBarButtonItem(
+      image: UIImage(systemName: "list.bullet"),
+      style: .plain, target: self, action: #selector(showChapters))
+    chaptersItem.accessibilityLabel = "Chapter list"
+    navigationItem.leftBarButtonItems = [closeItem, chaptersItem]
+
+    let fontItem = UIBarButtonItem(title: "aA", style: .plain,
+      target: self, action: #selector(showFontSizeSheet))
+    fontItem.accessibilityLabel = "Font size"
+    let options = UIBarButtonItem(
+      image: UIImage(systemName: "ellipsis.circle"),
+      menu: UIMenu(children: [
+        UIAction(title: bookmarked ? "Remove bookmark" : "Bookmark chapter",
+                 image: UIImage(systemName: bookmarked ? "bookmark.slash" : "bookmark")) {
+          [weak self] _ in self?.toggleBookmark()
+        },
+        UIAction(title: "Reading settings", image: UIImage(systemName: "textformat.size")) {
+          [weak self] _ in self?.showSettings()
+        },
+        UIAction(title: "Change reading layout", image: UIImage(systemName: "book")) {
+          [weak self] _ in self?.cycleReadingLayout()
+        },
+        UIAction(title: speech.isSpeaking ? "Stop reading aloud" : "Read aloud",
+                 image: UIImage(systemName: "waveform")) {
+          [weak self] _ in self?.toggleSpeech()
+        }
+      ]))
+    options.accessibilityLabel = "Reader actions"
+    navigationItem.rightBarButtonItems = [options, fontItem]
 
     readerControls.configure(
       hasPrevious: chapter["hasPrevious"] as? Bool ?? false,
@@ -1649,47 +1672,20 @@ private final class NovayomiReaderControls: UIView {
     progressRow.translatesAutoresizingMaskIntoConstraints = false
     material.contentView.addSubview(progressRow)
 
-    let separator = UIView()
-    separator.backgroundColor = .separator
-    separator.translatesAutoresizingMaskIntoConstraints = false
-    material.contentView.addSubview(separator)
-
-    configureButton(chapterButton, symbol: "list.number", label: "Chapters", selector: #selector(chaptersTapped))
-    configureButton(fontButton, symbol: "textformat.size", label: "Font size", selector: #selector(fontTapped))
-    configureButton(layoutButton, symbol: "arrow.up.arrow.down", label: "Reading layout", selector: #selector(layoutTapped))
-    configureButton(speechButton, symbol: "waveform", label: "Read aloud", selector: #selector(speechTapped))
-    configureButton(settingsButton, symbol: "slider.horizontal.3", label: "Reading settings", selector: #selector(settingsTapped))
-    let actions = UIStackView(arrangedSubviews: [
-      chapterButton, fontButton, layoutButton, speechButton, settingsButton
-    ])
-    actions.axis = .horizontal
-    actions.alignment = .center
-    actions.distribution = .fillEqually
-    actions.translatesAutoresizingMaskIntoConstraints = false
-    material.contentView.addSubview(actions)
-
-    caption.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    caption.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
     caption.textColor = .secondaryLabel
     caption.textAlignment = .center
     caption.translatesAutoresizingMaskIntoConstraints = false
     material.contentView.addSubview(caption)
 
     NSLayoutConstraint.activate([
-      progressRow.topAnchor.constraint(equalTo: material.contentView.topAnchor, constant: 6),
-      progressRow.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 7),
-      progressRow.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -7),
-      progressRow.heightAnchor.constraint(equalToConstant: 45),
-      separator.topAnchor.constraint(equalTo: progressRow.bottomAnchor, constant: 2),
-      separator.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 12),
-      separator.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -12),
-      separator.heightAnchor.constraint(equalToConstant: 0.5),
-      actions.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 1),
-      actions.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 10),
-      actions.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -10),
-      actions.heightAnchor.constraint(equalToConstant: 47),
-      caption.topAnchor.constraint(equalTo: actions.bottomAnchor, constant: 0),
+      progressRow.topAnchor.constraint(equalTo: material.contentView.topAnchor, constant: 4),
+      progressRow.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 10),
+      progressRow.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -10),
+      progressRow.heightAnchor.constraint(equalToConstant: 42),
+      caption.topAnchor.constraint(equalTo: progressRow.bottomAnchor, constant: 1),
       caption.centerXAnchor.constraint(equalTo: material.contentView.centerXAnchor),
-      caption.bottomAnchor.constraint(lessThanOrEqualTo: material.contentView.bottomAnchor, constant: -4)
+      caption.bottomAnchor.constraint(lessThanOrEqualTo: material.contentView.bottomAnchor, constant: -3)
     ])
   }
 
