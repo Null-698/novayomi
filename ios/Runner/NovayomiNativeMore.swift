@@ -232,9 +232,9 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     return UIGraphicsImageRenderer(size: canvas).image { _ in
       color.setFill()
       UIBezierPath(roundedRect: CGRect(origin: .zero, size: canvas), cornerRadius: 8).fill()
-      let symbol = UIImage(systemName: item.symbol, withConfiguration:
-        UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold))
-        ?.withTintColor(.white, renderingMode: .alwaysOriginal)
+      let symbol = UIImage(systemName: item.symbol,
+        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold))?.withTintColor(
+          .white, renderingMode: .alwaysOriginal)
       symbol?.draw(in: CGRect(x: 7, y: 7, width: 20, height: 20))
     }
   }
