@@ -20,17 +20,20 @@ final class NovayomiNativeMoreFactory: NSObject, FlutterPlatformViewFactory {
 }
 
 private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
-    UITableViewDataSource, UITableViewDelegate {
+    UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate {
   private struct Item {
     let title: String
     let symbol: String
     let path: String
     let toggle: Bool
-    init(_ title: String, _ symbol: String, _ path: String, toggle: Bool = false) {
+    let detail: String?
+    init(_ title: String, _ symbol: String, _ path: String,
+         toggle: Bool = false, detail: String? = nil) {
       self.title = title
       self.symbol = symbol
       self.path = path
       self.toggle = toggle
+      self.detail = detail
     }
   }
 
@@ -39,6 +42,9 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
   private let heading = UILabel()
   private let summary = UILabel()
   private let scrollingHeader = UIView()
+  private let search = UISearchBar()
+  private var allGroups: [(String, [Item])] = []
+  private var searchText = ""
   private let table = UITableView(frame: .zero, style: .insetGrouped)
   private var downloadedOnly = false
   private var incognito = false
@@ -53,7 +59,7 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     super.init()
     root.backgroundColor = .systemGroupedBackground
     root.tintColor = .novayomiAccent
-    heading.text = "More"
+    heading.text = "Settings"
     heading.font = .preferredFont(forTextStyle: .largeTitle)
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
@@ -63,23 +69,31 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     summary.numberOfLines = 2
     summary.adjustsFontForContentSizeCategory = true
     summary.translatesAutoresizingMaskIntoConstraints = false
-    scrollingHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 118)
+    scrollingHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 146)
+    search.delegate = self
+    search.placeholder = "Search"
+    search.searchBarStyle = .minimal
+    search.translatesAutoresizingMaskIntoConstraints = false
     scrollingHeader.addSubview(heading)
-    scrollingHeader.addSubview(summary)
+    scrollingHeader.addSubview(search)
     NSLayoutConstraint.activate([
-      heading.topAnchor.constraint(equalTo: scrollingHeader.topAnchor, constant: 20),
+      heading.topAnchor.constraint(equalTo: scrollingHeader.topAnchor, constant: 18),
       heading.leadingAnchor.constraint(equalTo: scrollingHeader.leadingAnchor, constant: 22),
       heading.trailingAnchor.constraint(equalTo: scrollingHeader.trailingAnchor, constant: -18),
-      summary.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8),
-      summary.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
-      summary.trailingAnchor.constraint(equalTo: heading.trailingAnchor)
+      search.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 14),
+      search.leadingAnchor.constraint(equalTo: scrollingHeader.leadingAnchor, constant: 8),
+      search.trailingAnchor.constraint(equalTo: scrollingHeader.trailingAnchor, constant: -8),
+      search.heightAnchor.constraint(equalToConstant: 52)
     ])
     table.tableHeaderView = scrollingHeader
 
     table.backgroundColor = .clear
     table.dataSource = self
     table.delegate = self
-    table.rowHeight = 60
+    table.rowHeight = UITableView.automaticDimension
+    table.estimatedRowHeight = 65
+    table.keyboardDismissMode = .onDrag
+    table.sectionHeaderTopPadding = 12
     table.estimatedSectionHeaderHeight = 30
     table.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(table)
@@ -112,32 +126,58 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     let seconds = data["seconds"] as? Int ?? 0
     let time = seconds >= 3600 ? "\(seconds / 3600) h" : "\(seconds / 60) min"
     summary.text = "\(series) novels  ·  \(chapters) chapters read  ·  \(time)"
-    var library = [
-      Item("Download Queue", "arrow.down.circle", "/downloadQueue"),
-      Item("Collections", "folder", "/categories"),
-      Item("Statistics", "chart.bar.xaxis", "/statistics"),
-      Item("Calendar", "calendar", "/calendarScreen"),
-      Item("Mass Migration", "arrow.left.arrow.right", "/massMigration")
-    ]
-    if showHistory { library.insert(Item("Reading History", "clock.arrow.circlepath", "/history"), at: 0) }
-    groups = [
-      ("Reading Modes", [
-        Item("Downloaded Only", "arrow.down.circle", "downloadedOnly", toggle: true),
-        Item("Incognito Mode", "eye.slash", "incognito", toggle: true)
+    allGroups = [
+      ("", [
+        Item("Incognito Mode", "eye.slash", "incognito", toggle: true,
+             detail: "Pauses reading history when enabled")
       ]),
-      ("Library", library),
-      ("Application", [
-        Item("Data & Storage", "externaldrive", "/dataAndStorage"),
-        Item("Settings", "gearshape", "/settings"),
-        Item("About Novayomi", "info.circle", "/about")
+      ("", [
+        Item("Appearance", "textformat.size", "/appearance"),
+        Item("Library", "books.vertical", "/categories"),
+        Item("Reader", "book.pages", "/novelReaderMode"),
+        Item("Tracking", "arrow.triangle.2.circlepath", "/track"),
+        Item("Downloads", "arrow.down.circle", "/downloads"),
+        Item("iCloud / Sync", "icloud", "/sync"),
+        Item("Advanced", "gearshape.2.fill", "/settings")
+      ]),
+      ("", [
+        Item("About", "info.circle.fill", "/about"),
+        Item("Insights", "chart.bar.fill", "/statistics"),
+        Item("Data & Storage", "externaldrive.fill", "/dataAndStorage"),
+        Item("Download Queue", "tray.full.fill", "/downloadQueue"),
+        Item("Collections", "folder.fill", "/categories"),
+        Item("Calendar", "calendar", "/calendarScreen"),
+        Item("Mass Migration", "arrow.left.arrow.right", "/massMigration"),
+        Item("Downloaded Only", "arrow.down.circle.fill", "downloadedOnly", toggle: true)
       ])
     ]
-    table.reloadData()
+    if showHistory {
+      allGroups[2].1.insert(Item("Reading History", "clock", "/history"), at: 2)
+    }
+    filter(searchText)
+
   }
 
+  private func filter(_ query: String) {
+    searchText = query
+    groups = allGroups.compactMap { title, entries in
+      let selected = entries.filter {
+        query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
+            || ($0.detail ?? "").localizedCaseInsensitiveContains(query)
+      }
+      return selected.isEmpty ? nil : (title, selected)
+    }
+    table.reloadData()
+  }
+  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    filter(searchText.trimmingCharacters(in: .whitespacesAndNewlines))
+  }
+  func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+    searchBar.resignFirstResponder()
+  }
   func numberOfSections(in tableView: UITableView) -> Int { groups.count }
   func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-    groups[section].0
+    groups[section].0.isEmpty ? nil : groups[section].0
   }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     groups[section].1.count
@@ -145,11 +185,15 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     let item = groups[indexPath.section].1[indexPath.row]
     let cell = tableView.dequeueReusableCell(withIdentifier: "native-more")
-      ?? UITableViewCell(style: .default, reuseIdentifier: "native-more")
+      ?? UITableViewCell(style: .subtitle, reuseIdentifier: "native-more")
     var content = cell.defaultContentConfiguration()
     content.text = item.title
-    content.image = UIImage(systemName: item.symbol)
-    content.imageProperties.tintColor = root.tintColor
+    content.textProperties.font = .preferredFont(forTextStyle: .body)
+    content.secondaryText = item.detail
+    content.secondaryTextProperties.color = .secondaryLabel
+    content.secondaryTextProperties.numberOfLines = 2
+    content.image = tile(for: item)
+    content.imageProperties.maximumSize = CGSize(width: 34, height: 34)
     cell.contentConfiguration = content
     if item.toggle {
       let toggle = UISwitch()
@@ -173,6 +217,28 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     guard !item.toggle else { return }
     channel.invokeMethod("navigate", arguments: item.path)
   }
+  private func tile(for item: Item) -> UIImage? {
+    let color: UIColor
+    switch item.path {
+    case "/appearance", "/sync", "/categories": color = .systemBlue
+    case "/novelReaderMode", "/calendarScreen": color = .systemGreen
+    case "/track", "/downloads": color = .systemOrange
+    case "/settings", "/dataAndStorage": color = .systemGray
+    case "/statistics", "/history": color = .systemIndigo
+    case "incognito", "/downloadQueue": color = .systemRed
+    default: color = .systemGray2
+    }
+    let canvas = CGSize(width: 34, height: 34)
+    return UIGraphicsImageRenderer(size: canvas).image { _ in
+      color.setFill()
+      UIBezierPath(roundedRect: CGRect(origin: .zero, size: canvas), cornerRadius: 8).fill()
+      let symbol = UIImage(systemName: item.symbol, withConfiguration:
+        UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold))
+        ?.withTintColor(.white, renderingMode: .alwaysOriginal)
+      symbol?.draw(in: CGRect(x: 7, y: 7, width: 20, height: 20))
+    }
+  }
+
   @objc private func toggleChanged(_ control: UISwitch) {
     let name = control.tag == 0 ? "downloadedOnly" : "incognito"
     if control.tag == 0 { downloadedOnly = control.isOn }
