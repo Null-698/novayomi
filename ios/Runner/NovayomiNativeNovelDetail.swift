@@ -288,7 +288,8 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   private let heading = UILabel()
   private let detail = UILabel()
   private let descriptionLabel = UILabel()
-  private let genres = UILabel()
+  private let genreScroll = UIScrollView()
+  private let genreStack = UIStackView()
   private let expandButton = UIButton(type: .system)
   private let readButton = UIButton(type: .system)
   private var coverRequest: URLSessionDataTask?
@@ -315,9 +316,21 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     descriptionLabel.font = .preferredFont(forTextStyle: .body)
     descriptionLabel.numberOfLines = 0
     descriptionLabel.adjustsFontForContentSizeCategory = true
-    genres.font = .preferredFont(forTextStyle: .footnote)
-    genres.textColor = .secondaryLabel
-    genres.numberOfLines = 2
+    genreScroll.showsHorizontalScrollIndicator = false
+    genreScroll.alwaysBounceHorizontal = true
+    genreScroll.heightAnchor.constraint(equalToConstant: 34).isActive = true
+    genreStack.axis = .horizontal
+    genreStack.alignment = .center
+    genreStack.spacing = 8
+    genreStack.translatesAutoresizingMaskIntoConstraints = false
+    genreScroll.addSubview(genreStack)
+    NSLayoutConstraint.activate([
+      genreStack.leadingAnchor.constraint(equalTo: genreScroll.contentLayoutGuide.leadingAnchor),
+      genreStack.trailingAnchor.constraint(equalTo: genreScroll.contentLayoutGuide.trailingAnchor),
+      genreStack.topAnchor.constraint(equalTo: genreScroll.contentLayoutGuide.topAnchor),
+      genreStack.bottomAnchor.constraint(equalTo: genreScroll.contentLayoutGuide.bottomAnchor),
+      genreStack.heightAnchor.constraint(equalTo: genreScroll.frameLayoutGuide.heightAnchor)
+    ])
     expandButton.setTitle("Show more", for: .normal)
     expandButton.contentHorizontalAlignment = .leading
     expandButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
@@ -336,7 +349,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     row.axis = .horizontal
     row.alignment = .top
     row.spacing = 14
-    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genres, readButton])
+    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genreScroll, readButton])
     column.axis = .vertical
     column.spacing = 14
     column.translatesAutoresizingMaskIntoConstraints = false
@@ -378,8 +391,27 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     descriptionLabel.isHidden = plain.isEmpty
     expandButton.isHidden = plain.count < 180
     expandButton.setTitle(expanded ? "Show less" : "Show more", for: .normal)
-    genres.text = (data["genres"] as? [String] ?? []).prefix(6).map { "  \($0)  " }.joined(separator: "  ·  ")
-    genres.isHidden = genres.text?.isEmpty ?? true
+    for chip in genreStack.arrangedSubviews {
+      genreStack.removeArrangedSubview(chip)
+      chip.removeFromSuperview()
+    }
+    let labels = Array((data["genres"] as? [String] ?? []).prefix(12))
+    genreScroll.isHidden = labels.isEmpty
+    for name in labels where !name.isEmpty {
+      let chip = UIButton(type: .system)
+      var configuration = UIButton.Configuration.gray()
+      configuration.title = name
+      configuration.cornerStyle = .capsule
+      configuration.contentInsets = NSDirectionalEdgeInsets(
+        top: 5, leading: 12, bottom: 5, trailing: 12)
+      chip.configuration = configuration
+      chip.isUserInteractionEnabled = false
+      chip.accessibilityLabel = name
+      genreStack.addArrangedSubview(chip)
+    }
+    genreScroll.setContentOffset(.zero, animated: false)
+    readButton.setTitle(data["readChapterId"] == nil ? "Start reading" : "Continue reading",
+                        for: .normal)
     readButton.isEnabled = (data["chapterCount"] as? Int ?? 0) > 0
 
     cover.image = UIImage(systemName: "book.closed")
