@@ -29,6 +29,7 @@ jobs:
         run: |
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/modules/novel/native_novel_reader_screen.dart \
+            lib/modules/main_view/widgets/mobile_bottom_navigation.dart \
             lib/modules/library/native_ios_novel_library.dart \
             lib/modules/manga/detail/native_ios_novel_detail.dart \
             lib/modules/more/native_ios_more_screen.dart \
@@ -103,5 +104,16 @@ jobs:
           assert 'NovayomiSourceRowCell' in browse and 'loadIcon(imageURL)' in browse
           assert 'titleHeader' in settings and 'scrollViewDidScroll' in settings
           assert 'largeTitle.text = sectionTitle' in preferences
-          print('Native reader, scrolling library, source artwork, and settings headers verified.')
+          bars = Path('ios/Runner/NovayomiNativeBars.swift').read_text()
+          nav = Path('lib/modules/main_view/widgets/mobile_bottom_navigation.dart').read_text()
+          source = Path('ios/Runner/NovayomiNativeSourceResults.swift').read_text()
+          source_dart = Path('lib/modules/manga/home/native_ios_source_results.dart').read_text()
+          more = Path('ios/Runner/NovayomiNativeMore.swift').read_text()
+          assert 'tabSearch' in bars and 'searchPressed' in bars
+          assert "route.push('/globalSearch'" in nav
+          assert "ItemType.novel" in nav and "Settings" in nav
+          assert 'configureHomeHeader' in source and 'NovayomiFeaturedNovelCell' in source
+          assert 'getPopularProvider' in source_dart and 'getLatestUpdatesProvider' in source_dart
+          assert 'heading.text = "Settings"' in more and 'tile(for: item)' in more
+          print('Native reader, library, Browse, Settings, tab search, and source Home verified.')
           PY
