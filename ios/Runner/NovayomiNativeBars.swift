@@ -624,3 +624,93 @@ private final class NovayomiReaderTopView: UIView {
   @objc private func goBack() { onAction?("back") }
   @objc private func toggleBookmark() { onAction?("bookmark") }
 }
+
+
+/// Native floating tab navigation for pushed novel detail and source pages.
+/// The main shell uses the same UITabBar + UIGlassEffect arrangement.
+/// Routes remain in GoRouter; UIKit only owns the visible controls.
+final class NovayomiDetailTabOverlay: UIView, UITabBarDelegate {
+  var onRoute: ((String) -> Void)?
+  private let tabBar = UITabBar()
+  private let glass: UIVisualEffectView
+  private let searchGlass: UIVisualEffectView
+  private let searchButton = UIButton(type: .system)
+  private let routes = ["/NovelLibrary", "/browse", "/history", "/more"]
+
+  init(selected: Int, onRoute: @escaping (String) -> Void) {
+    self.onRoute = onRoute
+    if #available(iOS 26.0, *) {
+      glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      searchGlass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      glass.cornerConfiguration = .capsule()
+      searchGlass.cornerConfiguration = .capsule()
+    } else {
+      glass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+      searchGlass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+      glass.layer.cornerRadius = 29
+      searchGlass.layer.cornerRadius = 29
+      glass.clipsToBounds = true
+      searchGlass.clipsToBounds = true
+    }
+    super.init(frame: .zero)
+    backgroundColor = .clear
+    tabBar.delegate = self
+    tabBar.isTranslucent = true
+    tabBar.tintColor = .novayomiAccent
+    tabBar.unselectedItemTintColor = .label
+    let appearance = UITabBarAppearance()
+    appearance.configureWithTransparentBackground()
+    tabBar.standardAppearance = appearance
+    tabBar.scrollEdgeAppearance = appearance
+    let names = ["Library", "Browse", "History", "Settings"]
+    let icons = ["books.vertical", "globe", "clock", "gearshape"]
+    let entries = names.enumerated().map { index, name -> UITabBarItem in
+      let symbol = icons[index]
+      let item = UITabBarItem(title: name,
+        image: UIImage(systemName: symbol),
+        selectedImage: UIImage(systemName: symbol + ".fill") ?? UIImage(systemName: symbol))
+      item.tag = index
+      return item
+    }
+    tabBar.setItems(entries, animated: false)
+    tabBar.selectedItem = entries.indices.contains(selected) ? entries[selected] : entries[0]
+
+    searchButton.setImage(UIImage(systemName: "magnifyingglass", withConfiguration:
+      UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)), for: .normal)
+    searchButton.tintColor = .label
+    searchButton.accessibilityLabel = "Search novels"
+    searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
+    glass.translatesAutoresizingMaskIntoConstraints = false
+    searchGlass.translatesAutoresizingMaskIntoConstraints = false
+    tabBar.translatesAutoresizingMaskIntoConstraints = false
+    searchButton.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(glass)
+    addSubview(searchGlass)
+    glass.contentView.addSubview(tabBar)
+    searchGlass.contentView.addSubview(searchButton)
+    NSLayoutConstraint.activate([
+      glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+      glass.trailingAnchor.constraint(equalTo: searchGlass.leadingAnchor, constant: -9),
+      glass.topAnchor.constraint(equalTo: topAnchor),
+      glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+      searchGlass.trailingAnchor.constraint(equalTo: trailingAnchor),
+      searchGlass.centerYAnchor.constraint(equalTo: glass.centerYAnchor),
+      searchGlass.widthAnchor.constraint(equalToConstant: 58),
+      searchGlass.heightAnchor.constraint(equalToConstant: 58),
+      tabBar.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
+      tabBar.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
+      tabBar.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
+      tabBar.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
+      searchButton.topAnchor.constraint(equalTo: searchGlass.contentView.topAnchor),
+      searchButton.bottomAnchor.constraint(equalTo: searchGlass.contentView.bottomAnchor),
+      searchButton.leadingAnchor.constraint(equalTo: searchGlass.contentView.leadingAnchor),
+      searchButton.trailingAnchor.constraint(equalTo: searchGlass.contentView.trailingAnchor)
+    ])
+  }
+  required init?(coder: NSCoder) { fatalError("Storyboard unsupported") }
+  func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+    guard routes.indices.contains(item.tag) else { return }
+    onRoute?(routes[item.tag])
+  }
+  @objc private func searchTapped() { onRoute?("search") }
+}
