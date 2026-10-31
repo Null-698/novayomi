@@ -92,6 +92,15 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
       switch (call.method) {
         case 'close':
           if (context.canPop()) context.pop();
+        case 'tab':
+          final target = call.arguments as String?;
+          if (target == 'search') {
+            context.push('/globalSearch', extra: (null, ItemType.novel));
+          } else if (const {
+            '/NovelLibrary', '/browse', '/history', '/more',
+          }.contains(target)) {
+            context.go(target!);
+          }
         case 'refresh':
           await _refresh(initial: false);
         case 'openSource':
