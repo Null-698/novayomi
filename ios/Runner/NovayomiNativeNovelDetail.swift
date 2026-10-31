@@ -81,7 +81,14 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     table.register(UITableViewCell.self, forCellReuseIdentifier: "novel-chapter")
     refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
     table.refreshControl = refresh
+    table.contentInset.bottom = 94
+    table.verticalScrollIndicatorInsets.bottom = 94
     root.addSubview(table)
+    let floatingTabs = NovayomiDetailTabOverlay(selected: 0) {
+      [weak self] target in self?.send("tab", target)
+    }
+    floatingTabs.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(floatingTabs)
     // Aidoku-style edge navigation. The underlying route remains Flutter,
     // but the gesture is recognized natively without a separate back button.
     let backSwipe = UIScreenEdgePanGestureRecognizer(
@@ -96,7 +103,11 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
       table.topAnchor.constraint(equalTo: nav.bottomAnchor),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+      table.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+      floatingTabs.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+      floatingTabs.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
+      floatingTabs.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -5),
+      floatingTabs.heightAnchor.constraint(equalToConstant: 58)
     ])
     apply(data)
     channel.setMethodCallHandler { [weak self] call, result in
