@@ -232,6 +232,13 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
         as! NovayomiNovelInfoCell
       cell.configure(info, expanded: descriptionExpanded)
       cell.onRead = { [weak self] in self?.send("resume") }
+      cell.onCover = { [weak self] image in
+        guard let image else { return }
+        let viewer = UINavigationController(rootViewController: NovayomiCoverViewer(image: image))
+        viewer.modalPresentationStyle = .fullScreen
+        viewer.overrideUserInterfaceStyle = .dark
+        self?.presentNative(viewer)
+      }
       cell.onExpand = { [weak self] in
         guard let self else { return }
         self.descriptionExpanded.toggle()
@@ -325,6 +332,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
 /// The native header reads existing Manga fields without a second backend.
 private final class NovayomiNovelInfoCell: UITableViewCell {
   var onRead: (() -> Void)?
+  var onCover: ((UIImage?) -> Void)?
   var onExpand: (() -> Void)?
   private let cover = UIImageView()
   private let heading = UILabel()
@@ -343,6 +351,11 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     cover.layer.cornerRadius = 12
     cover.clipsToBounds = true
     cover.contentMode = .scaleAspectFill
+    cover.isUserInteractionEnabled = true
+    cover.addGestureRecognizer(UITapGestureRecognizer(target: self,
+      action: #selector(coverTapped)))
+    cover.accessibilityTraits = [.image, .button]
+    cover.accessibilityLabel = "Show full-size novel cover"
     cover.backgroundColor = .secondarySystemGroupedBackground
     cover.translatesAutoresizingMaskIntoConstraints = false
     cover.widthAnchor.constraint(equalToConstant: 112).isActive = true
@@ -412,6 +425,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverKey = ""
     cover.image = UIImage(systemName: "book.closed")
     onRead = nil
+    onCover = nil
     onExpand = nil
   }
 
@@ -480,5 +494,64 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverRequest?.resume()
   }
   @objc private func readTapped() { onRead?() }
+  @objc private func coverTapped() { onCover?(cover.image) }
   @objc private func expandTapped() { onExpand?() }
+}
+
+private final class NovayomiCoverViewer: UIViewController, UIScrollViewDelegate {
+  private let artwork: UIImage
+  private let scroll = UIScrollView()
+  private let imageView = UIImageView()
+
+  init(image: UIImage) {
+    artwork = image
+    super.init(nibName: nil, bundle: nil)
+  }
+  required init?(coder: NSCoder) { fatalError("Storyboards are not supported") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .black
+    title = "Cover"
+    navigationItem.leftBarButtonItem = UIBarButtonItem(
+      image: UIImage(systemName: "xmark"), style: .plain,
+      target: self, action: #selector(close))
+    scroll.minimumZoomScale = 1
+    scroll.maximumZoomScale = 4
+    scroll.delegate = self
+    scroll.contentInsetAdjustmentBehavior = .never
+    scroll.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(scroll)
+    imageView.image = artwork
+    imageView.contentMode = .scaleAspectFit
+    imageView.translatesAutoresizingMaskIntoConstraints = false
+    scroll.addSubview(imageView)
+    NSLayoutConstraint.activate([
+      scroll.topAnchor.constraint(equalTo: view.topAnchor),
+      scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      imageView.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
+      imageView.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
+      imageView.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+      imageView.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+      imageView.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+      imageView.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor)
+    ])
+    let doubleTap = UITapGestureRecognizer(target: self,
+      action: #selector(toggleZoom(_:)))
+    doubleTap.numberOfTapsRequired = 2
+    scroll.addGestureRecognizer(doubleTap)
+    let dismissSwipe = UISwipeGestureRecognizer(target: self,
+      action: #selector(close))
+    dismissSwipe.direction = .down
+    view.addGestureRecognizer(dismissSwipe)
+  }
+
+  func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+  @objc private func toggleZoom(_ recognizer: UITapGestureRecognizer) {
+    let scale: CGFloat = scroll.zoomScale > 1 ? 1 : 2.5
+    scroll.setZoomScale(scale, animated: true)
+  }
+  @objc private func close() { dismiss(animated: true) }
 }
