@@ -28,6 +28,9 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private let search = UISearchBar()
   private let segmented = UISegmentedControl(items: ["Popular", "Latest"])
   private let table = UITableView(frame: .zero, style: .insetGrouped)
+  private let grid = NovayomiPosterGrid(style: .novels)
+  private var layoutItem: UIBarButtonItem?
+  private var showGrid = UserDefaults.standard.bool(forKey: "novayomi.results.grid")
   private let refresh = UIRefreshControl()
   private var novels: [[String: Any]] = []
   private var hasMore = false
@@ -59,6 +62,10 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
           [weak self] _ in self?.send("website")
         }
       ]))
+    layoutItem = UIBarButtonItem(
+      image: UIImage(systemName: "square.grid.2x2"),
+      primaryAction: UIAction { [weak self] _ in self?.toggleLayout() })
+    navItem.rightBarButtonItems = [layoutItem, navItem.rightBarButtonItem].compactMap { $0 }
     nav.setItems([navItem], animated: false)
     root.addSubview(nav)
 
@@ -81,6 +88,10 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
     table.refreshControl = refresh
     root.addSubview(table)
+    grid.translatesAutoresizingMaskIntoConstraints = false
+    grid.onSelect = { [weak self] i in self?.selectItem(i) }
+    grid.onRefresh = { [weak self] in self?.send("refresh") }
+    root.addSubview(grid)
     NSLayoutConstraint.activate([
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
@@ -95,14 +106,19 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       table.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 8),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+      table.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+      grid.topAnchor.constraint(equalTo: table.topAnchor),
+      grid.leadingAnchor.constraint(equalTo: table.leadingAnchor),
+      grid.trailingAnchor.constraint(equalTo: table.trailingAnchor),
+      grid.bottomAnchor.constraint(equalTo: table.bottomAnchor)
     ])
+    updateLayout()
     globalMode = data["globalMode"] as? Bool ?? false
     if globalMode {
       search.placeholder = "Search all novel sources"
       search.text = data["query"] as? String ?? ""
       segmented.isHidden = true
-      navItem.rightBarButtonItem = nil
+      navItem.rightBarButtonItems = [layoutItem].compactMap { $0 }
     }
     apply(data)
     channel.setMethodCallHandler { [weak self] call, result in
@@ -110,10 +126,12 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       if call.method == "update", let data = call.arguments as? [String: Any] {
         self.apply(data)
         self.refresh.endRefreshing()
+        self.grid.finishRefresh()
         result(nil)
       } else if call.method == "error" {
         self.busy = false
         self.refresh.endRefreshing()
+        self.grid.finishRefresh()
         let alert = UIAlertController(title: "Source failed",
           message: call.arguments as? String, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Retry", style: .default) {
@@ -145,6 +163,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     hasMore = data["hasMore"] as? Bool ?? false
     busy = data["loading"] as? Bool ?? false
     table.reloadData()
+    let posters = novels + (hasMore ? [[
+      "title": busy ? "Loading more…" : "Load more",
+      "description": "Load the next page of results"
+    ]] : [])
+    grid.display(posters)
     let empty = UILabel()
     empty.text = busy ? "Loading novels…" : "No novels found"
     empty.textColor = .secondaryLabel
@@ -154,6 +177,17 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       empty.numberOfLines = 3
     }
     table.backgroundView = novels.isEmpty ? empty : nil
+  }
+  @objc private func toggleLayout() {
+    showGrid.toggle()
+    UserDefaults.standard.set(showGrid, forKey: "novayomi.results.grid")
+    updateLayout()
+  }
+  private func updateLayout() {
+    table.isHidden = showGrid
+    grid.isHidden = !showGrid
+    layoutItem?.image = UIImage(systemName: showGrid ? "list.bullet" : "square.grid.2x2")
+    layoutItem?.accessibilityLabel = showGrid ? "Show list" : "Show grid"
   }
   @objc private func segmentChanged() {
     selected = segmented.selectedSegmentIndex
@@ -232,12 +266,15 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   }
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
-    if indexPath.row == novels.count {
+    selectItem(indexPath.row)
+  }
+  private func selectItem(_ index: Int) {
+    if index == novels.count {
       guard hasMore && !busy else { return }
       busy = true
       send("loadMore")
-    } else {
-      send("open", indexPath.row)
+    } else if novels.indices.contains(index) {
+      send("open", index)
     }
   }
 }
