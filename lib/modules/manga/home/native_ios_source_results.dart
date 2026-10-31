@@ -59,7 +59,8 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
         case 'close':
           if (context.canPop()) context.pop();
         case 'mode':
-          _mode = call.arguments == 1 ? 1 : 0;
+          final requested = call.arguments as int?;
+          _mode = requested == 2 ? 2 : requested == 1 ? 1 : 0;
           _query = '';
           await _load(reset: true);
         case 'search':
