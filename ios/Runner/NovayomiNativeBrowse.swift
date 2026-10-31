@@ -30,6 +30,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   private let table = UITableView(frame: .zero, style: .plain)
   private let grid = NovayomiPosterGrid(style: .sources)
   private let layoutButton = UIButton(type: .system)
+  private let addButton = UIButton(type: .system)
   private var showGrid = UserDefaults.standard.bool(forKey: "novayomi.browse.grid")
   private var allSources: [[String: Any]] = []
   private var allExtensions: [[String: Any]] = []
@@ -65,11 +66,40 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(heading)
-    layoutButton.setImage(UIImage(systemName: "square.grid.2x2"), for: .normal)
-    layoutButton.accessibilityLabel = "Switch list and grid layout"
-    layoutButton.addTarget(self, action: #selector(toggleLayout), for: .touchUpInside)
-    layoutButton.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(layoutButton)
+    // Aidoku Browse toolbar: switch Sources/Extensions and a native add menu.
+    layoutButton.setImage(UIImage(systemName: "arrow.left.arrow.right"), for: .normal)
+    layoutButton.accessibilityLabel = "Switch sources and extensions"
+    layoutButton.addTarget(self, action: #selector(toggleSourcesAndExtensions), for: .touchUpInside)
+    for button in [layoutButton, addButton] {
+      var config = UIButton.Configuration.tinted()
+      config.cornerStyle = .capsule
+      button.configuration = config
+      button.translatesAutoresizingMaskIntoConstraints = false
+      root.addSubview(button)
+    }
+    addButton.setImage(UIImage(systemName: "plus"), for: .normal)
+    addButton.accessibilityLabel = "Add extensions and source actions"
+    addButton.showsMenuAsPrimaryAction = true
+    addButton.menu = UIMenu(children: [
+      UIAction(title: "Manage extensions", image: UIImage(systemName: "puzzlepiece.extension")) {
+        [weak self] _ in
+        self?.segments.selectedSegmentIndex = 1
+        self?.tabChanged()
+        self?.channel.invokeMethod("action", arguments: "extensions")
+      },
+      UIAction(title: "Extension repositories", image: UIImage(systemName: "shippingbox")) {
+        [weak self] _ in self?.channel.invokeMethod("action", arguments: "repositories")
+      },
+      UIAction(title: "Source filters", image: UIImage(systemName: "line.3.horizontal.decrease")) {
+        [weak self] _ in self?.channel.invokeMethod("action", arguments: "sourceFilters")
+      },
+      UIAction(title: "Global novel search", image: UIImage(systemName: "magnifyingglass")) {
+        [weak self] _ in self?.channel.invokeMethod("action", arguments: "globalSearch")
+      },
+      UIAction(title: "Toggle grid / list", image: UIImage(systemName: "square.grid.2x2")) {
+        [weak self] _ in self?.toggleLayout()
+      }
+    ])
     search.searchBarStyle = .minimal
     search.placeholder = "Search sources"
     search.delegate = self
@@ -78,6 +108,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     segments.selectedSegmentIndex = extensionLanding ? 1 : 0
     segments.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
     segments.translatesAutoresizingMaskIntoConstraints = false
+    segments.isHidden = true
     root.addSubview(segments)
 
     table.dataSource = self
@@ -102,18 +133,19 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       backButton.widthAnchor.constraint(equalToConstant: 44),
       backButton.heightAnchor.constraint(equalToConstant: 44),
       heading.trailingAnchor.constraint(lessThanOrEqualTo: layoutButton.leadingAnchor, constant: -8),
-      layoutButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+      layoutButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -9),
       layoutButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
       layoutButton.widthAnchor.constraint(equalToConstant: 44),
       layoutButton.heightAnchor.constraint(equalToConstant: 44),
+      addButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+      addButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
+      addButton.widthAnchor.constraint(equalToConstant: 44),
+      addButton.heightAnchor.constraint(equalToConstant: 44),
       search.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 6),
       search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
       search.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
       search.heightAnchor.constraint(equalToConstant: 52),
-      segments.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 6),
-      segments.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-      segments.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-      table.topAnchor.constraint(equalTo: segments.bottomAnchor, constant: 8),
+      table.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 10),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -194,12 +226,16 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   private func updateLayout() {
     table.isHidden = showGrid
     grid.isHidden = !showGrid
-    layoutButton.setImage(UIImage(systemName: showGrid ? "list.bullet" : "square.grid.2x2"),
-                          for: .normal)
-    layoutButton.accessibilityLabel = showGrid ? "Show list" : "Show grid"
+    layoutButton.setImage(UIImage(systemName: "arrow.left.arrow.right"), for: .normal)
+    layoutButton.accessibilityLabel = "Switch sources and extensions"
   }
 
+  @objc private func toggleSourcesAndExtensions() {
+    segments.selectedSegmentIndex = segments.selectedSegmentIndex == 0 ? 1 : 0
+    tabChanged()
+  }
   @objc private func tabChanged() {
+    heading.text = segments.selectedSegmentIndex == 0 ? "Browse" : "Extensions"
     search.placeholder = segments.selectedSegmentIndex == 0 ? "Search sources" : "Search extensions"
     filter()
   }
@@ -213,7 +249,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
 
   func numberOfSections(in tableView: UITableView) -> Int { 1 }
   func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-    segments.selectedSegmentIndex == 0 ? "Sources" : "Extensions"
+    segments.selectedSegmentIndex == 0 ? "Installed" : "Extensions"
   }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     if segments.selectedSegmentIndex == 1 {
@@ -263,6 +299,16 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     }
     var content = cell.defaultContentConfiguration()
     content.text = label
+    if segments.selectedSegmentIndex == 0 && indexPath.row < filtered.count {
+      let version = filtered[indexPath.row]["version"] as? String ?? ""
+      if !version.isEmpty {
+        let attributed = NSMutableAttributedString(
+          string: label, attributes: [.foregroundColor: UIColor.label])
+        attributed.append(NSAttributedString(string: " v" + version,
+          attributes: [.foregroundColor: UIColor.secondaryLabel]))
+        content.attributedText = attributed
+      }
+    }
     content.secondaryText = subtitle
     content.image = UIImage(systemName: symbol)
     content.imageProperties.tintColor = .secondaryLabel
