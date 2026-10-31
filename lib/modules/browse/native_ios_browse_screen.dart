@@ -123,6 +123,7 @@ class _NativeIosBrowseScreenState extends ConsumerState<NativeIosBrowseScreen> {
             {
               'id': extension.id!,
               'name': extension.name ?? 'Extension',
+              'icon': extension.iconUrl ?? '',
               'lang': extension.lang ?? '',
               'installed': extension.isAdded ?? false,
               'version': extension.version ?? '',
@@ -137,6 +138,7 @@ class _NativeIosBrowseScreenState extends ConsumerState<NativeIosBrowseScreen> {
             {
               'id': source.id,
               'name': source.name ?? 'Source',
+              'icon': source.iconUrl ?? '',
               'lang': source.lang ?? '',
               'pinned': source.isPinned ?? false,
               'lastUsed': source.lastUsed ?? false,
