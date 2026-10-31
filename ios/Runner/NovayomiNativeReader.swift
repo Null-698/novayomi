@@ -864,8 +864,15 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     autoScrollLink = nil
     UIApplication.shared.isIdleTimerDisabled = previousIdleTimerDisabled
     if let brightness = previousBrightness { UIScreen.main.brightness = brightness }
+    // Keep native content visible while Flutter persists progress and
+    // restores the previous details route. Dismissing here exposed Flutter's
+    // reader-loading placeholder between screens.
+    onEvent?(["type":"closeRequested"])
+  }
+
+  func finishClose() {
+    guard didReportClose else { return }
     dismiss(animated: true) { [weak self] in
-      self?.onEvent?(["type":"closed"])
       self?.onDismiss?()
     }
   }

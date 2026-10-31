@@ -140,6 +140,13 @@ import UniformTypeIdentifiers
         navigation.isModalInPresentation = true
         presenter.present(navigation, animated: true)
         result(nil)
+      case "finishClose":
+        guard let reader = self.nativeNovelReader else {
+          result(nil)
+          return
+        }
+        reader.finishClose()
+        result(nil)
       case "replaceChapter":
         guard let args = call.arguments as? [String: Any],
               let reader = self.nativeNovelReader else {

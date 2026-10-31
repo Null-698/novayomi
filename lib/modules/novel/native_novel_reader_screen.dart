@@ -381,7 +381,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       case 'chapter':
         final id = payload['id'] as int?;
         if (id != null) unawaited(_navigate(id: id));
-      case 'closed':
+      case 'closeRequested':
         unawaited(_closeFromNative());
     }
     return null;
@@ -456,7 +456,16 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
       await VolumeKeys.disable();
       await _persistChapter();
     } finally {
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+        // Allow the retained novel-details frame to render before revealing it.
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      try {
+        await _channel.invokeMethod<void>('finishClose');
+      } catch (error) {
+        debugPrint('Unable to dismiss the native reader: $error');
+      }
     }
   }
 
