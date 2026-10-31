@@ -152,7 +152,9 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
       ])
     ]
     if showHistory {
-      allGroups[2].1.insert(Item("Reading History", "clock", "/history"), at: 2)
+      var extraEntries = allGroups[2].1
+      extraEntries.insert(Item("Reading History", "clock", "/history"), at: 2)
+      allGroups[2] = ("", extraEntries)
     }
     filter(searchText)
 
