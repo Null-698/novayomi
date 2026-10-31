@@ -51,6 +51,7 @@ jobs:
           for file in ios/Runner/NovayomiNative*.swift; do
             swiftc -frontend -parse "$file"
           done
+          swiftc -frontend -parse ios/Runner/NovayomiPosterGrid.swift
       - name: Check patch whitespace
         run: git diff --check HEAD~1 HEAD
       - name: Verify default routes and platform-view registration
@@ -78,5 +79,18 @@ jobs:
               assert f'withId: "novayomi/{suffix}"' in app, suffix
           for path in Path('ios/Runner').glob('NovayomiNative*.swift'):
               assert f'{path.name} in Sources' in project, path.name
-          print('All native route and Xcode registrations present.')
+          # Guard the nonblocking reader transition and native Aidoku-style chrome.
+          reader = Path('lib/modules/novel/native_novel_reader_screen.dart').read_text()
+          swift_reader = Path('ios/Runner/NovayomiNativeReader.swift').read_text()
+          details = Path('ios/Runner/NovayomiNativeNovelDetail.swift').read_text()
+          close = reader.split('void _closeFromNative()', 1)[1].split('  @override', 1)[0]
+          assert 'Navigator.of(context).pop()' in close
+          assert 'await _persistChapter()' not in close
+          assert 'await WidgetsBinding.instance.endOfFrame' not in close
+          assert 'setHistoryUpdate(elapsedSeconds: elapsed).catchError' in close
+          assert 'finishClose' in close
+          assert 'onEvent?(["type":"closeRequested"])' in swift_reader
+          assert 'chapterHeader' in details and 'configureChapterHeader' in details
+          assert 'NovayomiPosterGrid.swift in Sources' in project
+          print('Native reader transition, chapter header and cover grid verified.')
           PY
