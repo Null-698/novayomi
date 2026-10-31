@@ -12,6 +12,8 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
   private var items: [[String: Any]] = []
   var onSelect: ((Int) -> Void)?
   var menuFor: ((Int) -> UIMenu?)?
+  var onRefresh: (() -> Void)?
+  private let refresh = UIRefreshControl()
   private let spacing: CGFloat = 12
   private let sideInset: CGFloat = 16
 
@@ -28,6 +30,8 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
     collection.contentInset = UIEdgeInsets(top: 14, left: sideInset, bottom: 26, right: sideInset)
     collection.alwaysBounceVertical = true
     collection.keyboardDismissMode = .onDrag
+    collection.refreshControl = refresh
+    refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
     collection.register(NovayomiPosterCell.self, forCellWithReuseIdentifier: "poster")
     collection.translatesAutoresizingMaskIntoConstraints = false
     addSubview(collection)
@@ -46,6 +50,8 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
     items = entries
     collection.reloadData()
   }
+  func finishRefresh() { refresh.endRefreshing() }
+  @objc private func refreshRequested() { onRefresh?() }
 
   func numberOfSections(in collectionView: UICollectionView) -> Int { 1 }
   func collectionView(_ collectionView: UICollectionView,
