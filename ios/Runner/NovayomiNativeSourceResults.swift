@@ -201,7 +201,16 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     featuredCount = min(novels.count, data["featuredCount"] as? Int ?? 0)
     homeMode = !globalMode && (data["homeMode"] as? Bool ?? false)
     featuredCollection.reloadData()
-    table.tableHeaderView = homeMode ? homeHeader : nil
+    // Reassigning tableHeaderView on every Dart snapshot resets scroll position.
+    // Only swap headers when the actual presentation mode changes.
+    if homeMode {
+      if table.tableHeaderView !== homeHeader {
+        table.tableHeaderView = homeHeader
+      }
+    } else if table.tableHeaderView != nil {
+      table.tableHeaderView = nil
+    }
+    table.rowHeight = homeMode ? 122 : 78
     segmented.selectedSegmentIndex = homeMode ? 0 : 1
     hasMore = data["hasMore"] as? Bool ?? false
     busy = data["loading"] as? Bool ?? false
