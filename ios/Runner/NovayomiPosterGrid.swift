@@ -76,7 +76,7 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
       : (width >= 700 ? 6 : width >= 430 ? 4 : 3)
     let itemWidth = floor((width - (columns - 1) * spacing) / columns)
     let imageHeight = style == .novels ? itemWidth * 1.43 : itemWidth
-    return CGSize(width: itemWidth, height: imageHeight + (style == .novels ? 57 : 60))
+    return CGSize(width: itemWidth, height: imageHeight + (style == .novels ? 0 : 60))
   }
 
   func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
@@ -93,6 +93,8 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
 
 private final class NovayomiPosterCell: UICollectionViewCell {
   private let cover = UIImageView()
+  private let gradient = CAGradientLayer()
+  private let coverTitle = UILabel()
   private let title = UILabel()
   private let detail = UILabel()
   private var representedURL: String?
@@ -105,6 +107,16 @@ private final class NovayomiPosterCell: UICollectionViewCell {
     cover.backgroundColor = .tertiarySystemFill
     cover.contentMode = .scaleAspectFill
     cover.translatesAutoresizingMaskIntoConstraints = false
+    gradient.colors = [UIColor.clear.cgColor,
+                       UIColor.black.withAlphaComponent(0.8).cgColor]
+    gradient.locations = [0.3, 1.0]
+    cover.layer.addSublayer(gradient)
+    coverTitle.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
+      for: .systemFont(ofSize: 14, weight: .semibold))
+    coverTitle.textColor = .white
+    coverTitle.numberOfLines = 2
+    coverTitle.translatesAutoresizingMaskIntoConstraints = false
+    cover.addSubview(coverTitle)
     title.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(
       for: .systemFont(ofSize: 14, weight: .medium))
     title.adjustsFontForContentSizeCategory = true
@@ -117,6 +129,9 @@ private final class NovayomiPosterCell: UICollectionViewCell {
     detail.translatesAutoresizingMaskIntoConstraints = false
     for subview in [cover, title, detail] { contentView.addSubview(subview) }
     NSLayoutConstraint.activate([
+      coverTitle.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 9),
+      coverTitle.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -9),
+      coverTitle.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -10),
       cover.topAnchor.constraint(equalTo: contentView.topAnchor),
       cover.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       cover.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -138,12 +153,23 @@ private final class NovayomiPosterCell: UICollectionViewCell {
     cover.image = nil
     title.text = nil
     detail.text = nil
+    coverTitle.text = nil
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    gradient.frame = cover.bounds
   }
 
   func configure(_ data: [String: Any], style: NovayomiPosterGrid.Style) {
     let source = style == .sources
     let heading = data[source ? "name" : "title"] as? String ?? (source ? "Source" : "Novel")
     title.text = heading
+    coverTitle.text = heading
+    coverTitle.isHidden = source
+    gradient.isHidden = source
+    title.isHidden = !source
+    detail.isHidden = !source
     detail.text = source ? (data["lang"] as? String ?? "")
       : (data["description"] as? String ?? "")
     accessibilityLabel = [heading, detail.text ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
