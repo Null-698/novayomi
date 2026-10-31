@@ -242,6 +242,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
         as! NovayomiNovelInfoCell
       cell.configure(info, expanded: descriptionExpanded)
       cell.onRead = { [weak self] in self?.send("resume") }
+      cell.onFavorite = { [weak self] in self?.send("favorite") }
       cell.onCover = { [weak self] image in
         guard let image else { return }
         let viewer = UINavigationController(rootViewController: NovayomiCoverViewer(image: image))
@@ -342,6 +343,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
 /// The native header reads existing Manga fields without a second backend.
 private final class NovayomiNovelInfoCell: UITableViewCell {
   var onRead: (() -> Void)?
+  var onFavorite: (() -> Void)?
   var onCover: ((UIImage?) -> Void)?
   var onExpand: (() -> Void)?
   private let cover = UIImageView()
@@ -354,6 +356,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   private let genreStack = UIStackView()
   private let expandButton = UIButton(type: .system)
   private let readButton = UIButton(type: .system)
+  private let favoriteButton = UIButton(type: .system)
   private var coverRequest: URLSessionDataTask?
   private var coverKey: String = ""
 
@@ -416,6 +419,13 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     readButton.setTitle("Continue reading", for: .normal)
     readButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     readButton.addTarget(self, action: #selector(readTapped), for: .touchUpInside)
+    var favoriteConfig = UIButton.Configuration.tinted()
+    favoriteConfig.cornerStyle = .large
+    favoriteButton.configuration = favoriteConfig
+    favoriteButton.accessibilityLabel = "Add or remove from Library"
+    favoriteButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+    favoriteButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    favoriteButton.addTarget(self, action: #selector(favoriteTapped), for: .touchUpInside)
 
     let tagRow = UIStackView(arrangedSubviews: [statusPill, sourcePill])
     tagRow.axis = .horizontal
@@ -429,7 +439,10 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     row.axis = .horizontal
     row.alignment = .top
     row.spacing = 14
-    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genreScroll, readButton])
+    let actions = UIStackView(arrangedSubviews: [favoriteButton, readButton])
+    actions.axis = .horizontal
+    actions.spacing = 10
+    let column = UIStackView(arrangedSubviews: [row, actions, descriptionLabel, expandButton, genreScroll])
     column.axis = .vertical
     column.spacing = 12
     column.translatesAutoresizingMaskIntoConstraints = false
@@ -450,6 +463,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverKey = ""
     cover.image = UIImage(systemName: "book.closed")
     onRead = nil
+    onFavorite = nil
     onCover = nil
     onExpand = nil
   }
@@ -492,6 +506,9 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
       genreStack.addArrangedSubview(chip)
     }
     genreScroll.setContentOffset(.zero, animated: false)
+    let inLibrary = data["favorite"] as? Bool ?? false
+    favoriteButton.setImage(UIImage(systemName: inLibrary ? "bookmark.fill" : "bookmark"), for: .normal)
+    favoriteButton.accessibilityLabel = inLibrary ? "Remove from Library" : "Add to Library"
     readButton.setTitle(data["readChapterId"] == nil ? "Start reading" : "Continue reading",
                         for: .normal)
     readButton.isEnabled = (data["chapterCount"] as? Int ?? 0) > 0
@@ -520,6 +537,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverRequest?.resume()
   }
   @objc private func readTapped() { onRead?() }
+  @objc private func favoriteTapped() { onFavorite?() }
   @objc private func coverTapped() { onCover?(cover.image) }
   @objc private func expandTapped() { onExpand?() }
 }
