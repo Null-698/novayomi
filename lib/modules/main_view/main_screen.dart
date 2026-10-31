@@ -69,10 +69,15 @@ class _MainScreenState extends ConsumerState<MainScreen>
         : "/NovelLibrary";
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (!mounted) return;
+      // Native floating tabs can enter the shell directly from details or
+      // source pages. Never redirect an explicit destination back to Library.
+      final activePath = GoRouter.of(context)
+          .routeInformationProvider.value.uri.path;
+      if (activePath.isEmpty || activePath == '/') {
         context.go(_defaultLocation);
-        initLifecycleServices();
       }
+      initLifecycleServices();
     });
   }
 
