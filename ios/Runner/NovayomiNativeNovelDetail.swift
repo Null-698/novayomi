@@ -151,12 +151,8 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
           UIAction(title: "Copy novel title", image: UIImage(systemName: "doc.on.doc")) {
             [weak self] _ in UIPasteboard.general.string = self?.info["title"] as? String
           }
-        ])),
-      UIBarButtonItem(image: UIImage(systemName: favorite ? "heart.fill" : "heart"),
-        primaryAction: UIAction { [weak self] _ in self?.send("favorite") })
+        ]))
     ]
-    navItem.rightBarButtonItems?.last?.accessibilityLabel =
-      favorite ? "Remove from Library" : "Add to Library"
     filter()
   }
 
