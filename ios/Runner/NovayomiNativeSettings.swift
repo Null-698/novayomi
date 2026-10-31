@@ -59,6 +59,7 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemGroupedBackground
+    root.tintColor = .novayomiAccent
     nav.translatesAutoresizingMaskIntoConstraints = false
     navigation.leftBarButtonItem = UIBarButtonItem(
       image: UIImage(systemName: "chevron.backward"),

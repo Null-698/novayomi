@@ -50,6 +50,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemBackground
+    root.tintColor = .novayomiAccent
     let extensionLanding = data["initialSegment"] as? Int == 1
     backButton.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
     backButton.accessibilityLabel = "Back"

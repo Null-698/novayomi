@@ -47,6 +47,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemBackground
+    root.tintColor = .novayomiAccent
     nav.translatesAutoresizingMaskIntoConstraints = false
     let appearance = UINavigationBarAppearance()
     appearance.configureWithTransparentBackground()

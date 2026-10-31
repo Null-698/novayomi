@@ -92,6 +92,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     super.init()
 
     root.backgroundColor = .systemBackground
+    root.tintColor = .novayomiAccent
     heading.text = "Library"
     heading.font = .preferredFont(forTextStyle: .largeTitle)
     heading.adjustsFontForContentSizeCategory = true
@@ -1629,4 +1630,12 @@ private final class NovayomiLibraryRemovalSheet: UIViewController {
   }
 
   @objc private func cancel() { dismiss(animated: true) }
+}
+
+ 
+// Shared accent for native surfaces. This follows the reference application's
+// iOS palette while leaving the novel's custom page/text theme untouched.
+extension UIColor {
+  static let novayomiAccent = UIColor(
+    red: 1.0, green: 0.23, blue: 0.39, alpha: 1.0)
 }

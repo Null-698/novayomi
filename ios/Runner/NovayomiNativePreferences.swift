@@ -33,6 +33,7 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemGroupedBackground
+    root.tintColor = .novayomiAccent
     navigation.leftBarButtonItem = UIBarButtonItem(
       image: UIImage(systemName: "chevron.backward"),
       primaryAction: UIAction { [weak self] _ in self?.send("close") })

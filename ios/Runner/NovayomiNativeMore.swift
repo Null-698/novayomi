@@ -51,6 +51,7 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
                                    binaryMessenger: messenger)
     super.init()
     root.backgroundColor = .systemGroupedBackground
+    root.tintColor = .novayomiAccent
     heading.text = "More"
     heading.font = .preferredFont(forTextStyle: .largeTitle)
     heading.adjustsFontForContentSizeCategory = true
