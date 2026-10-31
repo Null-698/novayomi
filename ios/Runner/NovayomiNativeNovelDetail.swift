@@ -26,6 +26,9 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   private let nav = UINavigationBar()
   private let navItem = UINavigationItem(title: "Novel")
   private let search = UISearchBar()
+  private let chapterHeader = UIView()
+  private let chapterCountLabel = UILabel()
+  private let chapterSortButton = UIButton(type: .system)
   private let table = UITableView(frame: .zero, style: .plain)
   private let refresh = UIRefreshControl()
   private var info: [String: Any] = [:]
@@ -62,6 +65,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     // Aidoku's cover/details header appears first; chapter searching belongs
     // with the chapter list rather than above the novel cover.
     search.translatesAutoresizingMaskIntoConstraints = false
+    configureChapterHeader()
 
     table.translatesAutoresizingMaskIntoConstraints = false
     table.backgroundColor = .systemBackground
@@ -160,6 +164,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
       ($0["scanlator"] as? String ?? "").localizedCaseInsensitiveContains(trimmed)
     }
     if reversed { visibleChapters.reverse() }
+    chapterCountLabel.text = "Chapters · \(visibleChapters.count)"
     table.reloadData()
   }
 
@@ -187,37 +192,34 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   }
 
   func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-    guard section == 1 else { return nil }
-    let header = UIView()
-    header.backgroundColor = .systemBackground
-    let titleLabel = UILabel()
-    titleLabel.text = "Chapters · \(visibleChapters.count)"
-    titleLabel.font = .preferredFont(forTextStyle: .headline)
-    titleLabel.adjustsFontForContentSizeCategory = true
-    let order = UIButton(type: .system)
-    order.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
-    order.accessibilityLabel = "Reverse chapter sort order"
-    order.addTarget(self, action: #selector(toggleChapterSort), for: .touchUpInside)
-    let heading = UIStackView(arrangedSubviews: [titleLabel, order])
+    section == 1 ? chapterHeader : nil
+  }
+
+  private func configureChapterHeader() {
+    chapterHeader.backgroundColor = .systemBackground
+    chapterCountLabel.font = .preferredFont(forTextStyle: .headline)
+    chapterCountLabel.adjustsFontForContentSizeCategory = true
+    chapterSortButton.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
+    chapterSortButton.accessibilityLabel = "Reverse chapter sort order"
+    chapterSortButton.addTarget(self, action: #selector(toggleChapterSort), for: .touchUpInside)
+    let heading = UIStackView(arrangedSubviews: [chapterCountLabel, chapterSortButton])
     heading.axis = .horizontal
     heading.alignment = .center
-    heading.distribution = .fill
-    order.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-    order.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    chapterSortButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    chapterSortButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     heading.translatesAutoresizingMaskIntoConstraints = false
-    header.addSubview(heading)
-    header.addSubview(search)
+    chapterHeader.addSubview(heading)
+    chapterHeader.addSubview(search)
     NSLayoutConstraint.activate([
-      heading.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 22),
-      heading.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -18),
-      heading.topAnchor.constraint(equalTo: header.topAnchor, constant: 6),
+      heading.leadingAnchor.constraint(equalTo: chapterHeader.leadingAnchor, constant: 22),
+      heading.trailingAnchor.constraint(equalTo: chapterHeader.trailingAnchor, constant: -18),
+      heading.topAnchor.constraint(equalTo: chapterHeader.topAnchor, constant: 6),
       heading.heightAnchor.constraint(equalToConstant: 44),
       search.topAnchor.constraint(equalTo: heading.bottomAnchor),
-      search.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 12),
-      search.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
-      search.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -6)
+      search.leadingAnchor.constraint(equalTo: chapterHeader.leadingAnchor, constant: 12),
+      search.trailingAnchor.constraint(equalTo: chapterHeader.trailingAnchor, constant: -12),
+      search.bottomAnchor.constraint(equalTo: chapterHeader.bottomAnchor, constant: -6)
     ])
-    return header
   }
   @objc private func toggleChapterSort() {
     reversed.toggle()
