@@ -328,7 +328,7 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
           _ => 'dark',
         };
         groups.add(group('Theme and typography', [
-          item('novelTheme', 'Theme', theme, type: 'choice', display: theme,
+          item('novelTheme', 'Theme', theme, type: 'theme', display: theme,
             choices: [choice('dark', 'Dark'), choice('light', 'Light'),
               choice('black', 'Black'), choice('sepia', 'Sepia')]),
           item('novelBackground', 'Background color (hex)', background, type: 'text'),
@@ -345,7 +345,7 @@ class _NativeIosPreferencesState extends ConsumerState<NativeIosPreferencesScree
             choices: [for (final option in novelReaderFontOptions)
               choice(option.key ?? 'default', option.label)]),
           item('novelAlign', 'Text alignment', ref.watch(novelTextAlignStateProvider).name,
-            type: 'choice', display: ref.watch(novelTextAlignStateProvider).name,
+            type: 'alignment', display: ref.watch(novelTextAlignStateProvider).name,
             choices: [for (final value in NovelTextAlign.values)
               choice(value.name, value.name)]),
           item('novelMode', 'Reading mode', ref.watch(defaultReadingModeStateProvider).name,
