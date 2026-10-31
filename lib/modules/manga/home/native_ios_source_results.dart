@@ -58,6 +58,15 @@ class _NativeIosSourceResultsState extends ConsumerState<NativeIosSourceResults>
       switch (call.method) {
         case 'close':
           if (context.canPop()) context.pop();
+        case 'tab':
+          final target = call.arguments as String?;
+          if (target == 'search') {
+            context.push('/globalSearch', extra: (null, ItemType.novel));
+          } else if (const {
+            '/NovelLibrary', '/browse', '/history', '/more',
+          }.contains(target)) {
+            context.go(target!);
+          }
         case 'mode':
           final requested = call.arguments as int?;
           _mode = requested == 2 ? 2 : requested == 1 ? 1 : 0;
