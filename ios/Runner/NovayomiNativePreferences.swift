@@ -254,7 +254,7 @@ private final class NovayomiNativePreferencesView: NSObject, FlutterPlatformView
   }
 }
 
- 
+
 /// Dedicated full-width iOS settings row. A UISlider must live inside the
 /// contentView with real constraints, never in UITableViewCell.accessoryView.
 private final class NovayomiPreferenceSliderCell: UITableViewCell {
