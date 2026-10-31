@@ -135,7 +135,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
       readerControls.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 8),
       readerControls.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -8),
       readerControls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
-      readerControls.heightAnchor.constraint(equalToConstant: 72)
+      readerControls.heightAnchor.constraint(equalToConstant: 66)
     ])
     updatePercentLabel()
 
@@ -171,7 +171,7 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     // chrome hides, status-bar visibility changes, or a drag is in progress.
     let top = max(110, view.window?.safeAreaInsets.top ?? 0)
     // Reserve only the compact native progress bar and its safe-area space.
-    let bottom = max(100, (view.window?.safeAreaInsets.bottom ?? 0) + 74)
+    let bottom = max(92, (view.window?.safeAreaInsets.bottom ?? 0) + 68)
     contentInsets = UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0)
     webView.scrollView.contentInset = contentInsets
     webView.scrollView.scrollIndicatorInsets = contentInsets
@@ -432,26 +432,17 @@ final class NovayomiNativeReaderController: UIViewController, WKNavigationDelega
     titles.axis = .vertical
     titles.distribution = .fill
     titles.spacing = 1
-    // Keep the two-line title readable without a rectangular blur strip.
-    // This is genuine UIKit glass, respecting Clear/Frosted system settings.
-    let titleGlass: UIVisualEffectView
-    if #available(iOS 26.0, *) {
-      titleGlass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-      titleGlass.cornerConfiguration = .capsule()
-    } else {
-      titleGlass = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
-      titleGlass.layer.cornerRadius = 21
-      titleGlass.clipsToBounds = true
-    }
-    titleGlass.frame = CGRect(x: 0, y: 0, width: 205, height: 44)
+    // Let UINavigationBar apply the OS scroll-edge treatment. Do not wrap
+    // the centered chapter title in a second glass capsule.
+    let center = UIView(frame: CGRect(x: 0, y: 0, width: 205, height: 44))
     titles.translatesAutoresizingMaskIntoConstraints = false
-    titleGlass.contentView.addSubview(titles)
+    center.addSubview(titles)
     NSLayoutConstraint.activate([
-      titles.leadingAnchor.constraint(equalTo: titleGlass.contentView.leadingAnchor, constant: 10),
-      titles.trailingAnchor.constraint(equalTo: titleGlass.contentView.trailingAnchor, constant: -10),
-      titles.centerYAnchor.constraint(equalTo: titleGlass.contentView.centerYAnchor)
+      titles.leadingAnchor.constraint(equalTo: center.leadingAnchor, constant: 2),
+      titles.trailingAnchor.constraint(equalTo: center.trailingAnchor, constant: -2),
+      titles.centerYAnchor.constraint(equalTo: center.centerYAnchor)
     ])
-    navigationItem.titleView = titleGlass
+    navigationItem.titleView = center
 
     let closeItem = UIBarButtonItem(
       image: UIImage(systemName: "xmark"),
@@ -1663,29 +1654,41 @@ private final class NovayomiReaderControls: UIView {
     }
     slider.setContentHuggingPriority(.defaultLow, for: .horizontal)
     slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    // A long, usable progress track above the numeric labels.
+    // The previous and next actions remain 44-point hit targets.
     let progressRow = UIStackView(arrangedSubviews: [
-      previous, currentLabel, slider, endLabel, nextChapterButton
+      previous, slider, nextChapterButton
     ])
     progressRow.axis = .horizontal
     progressRow.alignment = .center
-    progressRow.spacing = 6
+    progressRow.spacing = 10
     progressRow.translatesAutoresizingMaskIntoConstraints = false
     material.contentView.addSubview(progressRow)
 
-    caption.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+    caption.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
     caption.textColor = .secondaryLabel
     caption.textAlignment = .center
-    caption.translatesAutoresizingMaskIntoConstraints = false
-    material.contentView.addSubview(caption)
+    let labels = UIStackView(arrangedSubviews: [currentLabel, UIView(), caption, UIView(), endLabel])
+    labels.axis = .horizontal
+    labels.distribution = .fill
+    labels.alignment = .center
+    labels.spacing = 4
+    labels.translatesAutoresizingMaskIntoConstraints = false
+    material.contentView.addSubview(labels)
+    for label in [currentLabel, endLabel] {
+      label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+      label.textColor = .secondaryLabel
+    }
 
     NSLayoutConstraint.activate([
-      progressRow.topAnchor.constraint(equalTo: material.contentView.topAnchor, constant: 4),
-      progressRow.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 10),
-      progressRow.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -10),
+      progressRow.topAnchor.constraint(equalTo: material.contentView.topAnchor, constant: 2),
+      progressRow.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 12),
+      progressRow.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -12),
       progressRow.heightAnchor.constraint(equalToConstant: 42),
-      caption.topAnchor.constraint(equalTo: progressRow.bottomAnchor, constant: 1),
-      caption.centerXAnchor.constraint(equalTo: material.contentView.centerXAnchor),
-      caption.bottomAnchor.constraint(lessThanOrEqualTo: material.contentView.bottomAnchor, constant: -3)
+      labels.topAnchor.constraint(equalTo: progressRow.bottomAnchor, constant: -1),
+      labels.leadingAnchor.constraint(equalTo: material.contentView.leadingAnchor, constant: 52),
+      labels.trailingAnchor.constraint(equalTo: material.contentView.trailingAnchor, constant: -52),
+      labels.bottomAnchor.constraint(lessThanOrEqualTo: material.contentView.bottomAnchor, constant: -3)
     ])
   }
 
