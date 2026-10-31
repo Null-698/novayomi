@@ -59,11 +59,13 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     search.placeholder = "Search chapters"
     search.searchBarStyle = .minimal
     search.delegate = self
-    search.frame = CGRect(x: 0, y: 0, width: frame.width, height: 56)
-    table.tableHeaderView = search
+    // Aidoku's cover/details header appears first; chapter searching belongs
+    // with the chapter list rather than above the novel cover.
+    search.translatesAutoresizingMaskIntoConstraints = false
 
     table.translatesAutoresizingMaskIntoConstraints = false
     table.backgroundColor = .systemBackground
+    table.sectionHeaderTopPadding = 0
     table.separatorStyle = .singleLine
     table.separatorInset = UIEdgeInsets(top: 0, left: 22, bottom: 0, right: 16)
     table.estimatedRowHeight = 76
@@ -180,8 +182,46 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     section == 0 ? 1 : visibleChapters.count
   }
-  func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-    section == 1 ? "Chapters · \(visibleChapters.count)" : nil
+  func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+    section == 1 ? 112 : .leastNormalMagnitude
+  }
+
+  func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+    guard section == 1 else { return nil }
+    let header = UIView()
+    header.backgroundColor = .systemBackground
+    let titleLabel = UILabel()
+    titleLabel.text = "Chapters · \(visibleChapters.count)"
+    titleLabel.font = .preferredFont(forTextStyle: .headline)
+    titleLabel.adjustsFontForContentSizeCategory = true
+    let order = UIButton(type: .system)
+    order.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
+    order.accessibilityLabel = "Reverse chapter sort order"
+    order.addTarget(self, action: #selector(toggleChapterSort), for: .touchUpInside)
+    let heading = UIStackView(arrangedSubviews: [titleLabel, order])
+    heading.axis = .horizontal
+    heading.alignment = .center
+    heading.distribution = .fill
+    order.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    order.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    heading.translatesAutoresizingMaskIntoConstraints = false
+    header.addSubview(heading)
+    header.addSubview(search)
+    NSLayoutConstraint.activate([
+      heading.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 22),
+      heading.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -18),
+      heading.topAnchor.constraint(equalTo: header.topAnchor, constant: 6),
+      heading.heightAnchor.constraint(equalToConstant: 44),
+      search.topAnchor.constraint(equalTo: heading.bottomAnchor),
+      search.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 12),
+      search.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
+      search.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -6)
+    ])
+    return header
+  }
+  @objc private func toggleChapterSort() {
+    reversed.toggle()
+    filter()
   }
 
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
