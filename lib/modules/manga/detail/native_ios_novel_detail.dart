@@ -16,6 +16,7 @@ import 'package:mangayomi/modules/more/providers/incognito_mode_state_provider.d
 import 'package:mangayomi/repositories/chapter_repository.dart';
 import 'package:mangayomi/repositories/download_repository.dart';
 import 'package:mangayomi/repositories/manga_repository.dart';
+import 'package:mangayomi/repositories/source_repository.dart';
 import 'package:mangayomi/utils/constant.dart';
 import 'package:mangayomi/utils/headers.dart';
 import 'package:mangayomi/utils/extensions/chapter_extensions.dart';
@@ -93,6 +94,12 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
           if (context.canPop()) context.pop();
         case 'refresh':
           await _refresh(initial: false);
+        case 'openSource':
+          final sourceId = manga?.sourceId;
+          if (sourceId == null) return;
+          final source = sourceRepository.getById(sourceId);
+          if (source == null || source.itemType != ItemType.novel) return;
+          if (mounted) context.push('/mangaHome', extra: (source, false));
         case 'read':
           final id = call.arguments as int?;
           if (id == null) return;
@@ -197,6 +204,9 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
         'genres': manga.genre ?? const <String>[],
         'favorite': manga.favorite ?? false,
         'chapterCount': chapters.length,
+        'allRead': chapters.isNotEmpty &&
+            chapters.every((chapter) => chapter.isRead ?? false),
+        'canOpenSource': manga.sourceId != null,
         'readChapterId': resume?.id,
         'cover': toImgUrl(
           manga.customCoverFromTracker ?? manga.imageUrl ?? '',
