@@ -31,6 +31,9 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
   private let channel: FlutterMethodChannel
   private let heading = UILabel()
   private let total = UILabel()
+  private let libraryTitleHeader = UIStackView()
+  private let compactBar = UIStackView()
+  private let compactTitle = UILabel()
   private let search = UISearchBar()
   private let categoryScroll = UIScrollView()
   private var categoryHeight: NSLayoutConstraint!
@@ -112,15 +115,25 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let labels = UIStackView(arrangedSubviews: [heading, total])
     labels.axis = .vertical
     labels.alignment = .leading
-    labels.spacing = 1
-    let header = UIStackView(arrangedSubviews: [
-      labels, UIView(), preferencesButton, layoutButton, actionsButton
-    ])
-    header.axis = .horizontal
-    header.alignment = .center
-    header.spacing = 12
-    header.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(header)
+    labels.spacing = 3
+    libraryTitleHeader.addArrangedSubview(labels)
+    libraryTitleHeader.axis = .horizontal
+    libraryTitleHeader.alignment = .bottom
+    libraryTitleHeader.translatesAutoresizingMaskIntoConstraints = false
+
+    compactTitle.text = "Library"
+    compactTitle.font = .preferredFont(forTextStyle: .headline)
+    compactTitle.alpha = 0
+    compactBar.axis = .horizontal
+    compactBar.alignment = .center
+    compactBar.spacing = 6
+    compactBar.translatesAutoresizingMaskIntoConstraints = false
+    compactBar.addArrangedSubview(compactTitle)
+    compactBar.addArrangedSubview(UIView())
+    for button in [preferencesButton, layoutButton, actionsButton] {
+      compactBar.addArrangedSubview(button)
+    }
+    root.addSubview(compactBar)
     NSLayoutConstraint.activate([
       preferencesButton.widthAnchor.constraint(equalToConstant: 44),
       preferencesButton.heightAnchor.constraint(equalToConstant: 44),
@@ -139,7 +152,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     search.showsScopeBar = true
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(search)
+    // Search and categories belong to the scrolling Library header.
 
     categoryStack.axis = .horizontal
     categoryStack.spacing = 8
@@ -149,8 +162,6 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     categoryHeight = categoryScroll.heightAnchor.constraint(equalToConstant: 42)
     categoryScroll.translatesAutoresizingMaskIntoConstraints = false
     categoryScroll.addSubview(categoryStack)
-    root.addSubview(categoryScroll)
-
     collection.backgroundColor = .clear
     collection.alwaysBounceVertical = true
     collection.keyboardDismissMode = .onDrag
@@ -272,24 +283,16 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     selectionBar.isHidden = true
 
     NSLayoutConstraint.activate([
-      header.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 8),
-      header.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-      header.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
-      header.heightAnchor.constraint(equalToConstant: 62),
-      search.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 2),
-      search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
-      search.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
-      search.heightAnchor.constraint(equalToConstant: 76),
-      categoryScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 4),
-      categoryScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      categoryScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      categoryHeight,
+      compactBar.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
+      compactBar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+      compactBar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
+      compactBar.heightAnchor.constraint(equalToConstant: 48),
       categoryStack.leadingAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.leadingAnchor, constant: 18),
       categoryStack.trailingAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.trailingAnchor, constant: -18),
       categoryStack.topAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.topAnchor),
       categoryStack.bottomAnchor.constraint(equalTo: categoryScroll.contentLayoutGuide.bottomAnchor),
       categoryStack.heightAnchor.constraint(equalTo: categoryScroll.frameLayoutGuide.heightAnchor),
-      collection.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 4),
+      collection.topAnchor.constraint(equalTo: compactBar.bottomAnchor),
       collection.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       collection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       collectionBottom
@@ -378,7 +381,10 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     continueCollection.isHidden = !hasShelf
     continueCollection.reloadData()
     collection.collectionViewLayout.invalidateLayout()
-    if let label = data["title"] as? String { heading.text = label }
+    if let label = data["title"] as? String {
+      heading.text = label
+      compactTitle.text = label
+    }
     if let index = data["sortIndex"] as? Int { sortIndex = index }
     if let size = data["gridSize"] as? Int { gridSize = size }
     if let index = data["displayIndex"] as? Int { displayMode = index }
@@ -571,7 +577,7 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let scroll = collection
     guard scroll.bounds.height > 0 else { return }
     scroll.layoutIfNeeded()
-    let requiredTravel: CGFloat = continueItems.isEmpty ? 0 : 238
+    let requiredTravel: CGFloat = max(0, libraryHeaderHeight - 45)
     let natural = scroll.collectionViewLayout.collectionViewContentSize.height
     let extra = requiredTravel == 0 ? 0
       : max(0, scroll.bounds.height + requiredTravel - natural)
@@ -603,6 +609,12 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
       "uncategorized": onlyUncategorized,
       "offset": Double(collection.contentOffset.y)
     ] as [String: Any])
+  }
+
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView === collection else { return }
+    // UIKit's compact navbar title appears as the large title scrolls away.
+    compactTitle.alpha = min(1, max(0, (scrollView.contentOffset.y - 36) / 54))
   }
 
   func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -658,10 +670,14 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 
   // A normal, non-pinned UICollectionView section header. It travels
   // vertically with the book cells, while its inner shelf scrolls horizontally.
+  private var libraryHeaderHeight: CGFloat {
+    72 + 76 + categoryHeight.constant + 8 + (continueItems.isEmpty ? 0 : 238)
+  }
+
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
                       referenceSizeForHeaderInSection section: Int) -> CGSize {
-    guard collectionView === collection, !continueItems.isEmpty else { return .zero }
-    return CGSize(width: collectionView.bounds.width, height: 238)
+    guard collectionView === collection else { return .zero }
+    return CGSize(width: collectionView.bounds.width, height: libraryHeaderHeight)
   }
 
   func collectionView(_ collectionView: UICollectionView,
@@ -673,15 +689,27 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     let header = collectionView.dequeueReusableSupplementaryView(
       ofKind: kind, withReuseIdentifier: "continue-reading-header",
       for: indexPath)
-    if continueHeading.superview !== header {
-      continueHeading.removeFromSuperview()
-      continueCollection.removeFromSuperview()
-      header.addSubview(continueHeading)
-      header.addSubview(continueCollection)
+    if libraryTitleHeader.superview !== header {
+      for view in [libraryTitleHeader, search, categoryScroll, continueHeading, continueCollection] {
+        view.removeFromSuperview()
+        header.addSubview(view)
+      }
       NSLayoutConstraint.activate([
-        continueHeading.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 18),
-        continueHeading.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -18),
-        continueHeading.topAnchor.constraint(equalTo: header.topAnchor, constant: 4),
+        libraryTitleHeader.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20),
+        libraryTitleHeader.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -20),
+        libraryTitleHeader.topAnchor.constraint(equalTo: header.topAnchor, constant: 4),
+        libraryTitleHeader.heightAnchor.constraint(equalToConstant: 68),
+        search.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
+        search.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -10),
+        search.topAnchor.constraint(equalTo: libraryTitleHeader.bottomAnchor),
+        search.heightAnchor.constraint(equalToConstant: 76),
+        categoryScroll.topAnchor.constraint(equalTo: search.bottomAnchor),
+        categoryScroll.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+        categoryScroll.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+        categoryHeight,
+        continueHeading.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20),
+        continueHeading.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -20),
+        continueHeading.topAnchor.constraint(equalTo: categoryScroll.bottomAnchor, constant: 8),
         continueHeadingHeight,
         continueCollection.leadingAnchor.constraint(equalTo: header.leadingAnchor),
         continueCollection.trailingAnchor.constraint(equalTo: header.trailingAnchor),
