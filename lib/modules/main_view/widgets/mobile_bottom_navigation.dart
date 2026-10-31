@@ -4,6 +4,7 @@ import 'package:mangayomi/modules/widgets/native_ios_bar.dart';
 import 'package:shiori/shiori.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mangayomi/models/manga.dart';
 import 'package:mangayomi/modules/widgets/floating_nav_bar.dart';
 import 'package:mangayomi/utils/extensions/build_context_extensions.dart';
 
@@ -44,27 +45,68 @@ class MainMobileBottomNavigation extends StatelessWidget {
     }
 
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final items = buildNavigationWidgetsMobile(ref, dest, context);
+      // Aidoku's four primary destinations; keep the original GoRouter
+      // destinations and feature screens rather than rebuilding the backend.
+      final iosDest = <String>[
+        '/NovelLibrary',
+        '/browse',
+        '/history',
+        '/more',
+      ].where((path) {
+        if (path == '/NovelLibrary') {
+          return dest.any((d) => d == path || d == '_library' ||
+              d == '_enableLibSwitch');
+        }
+        if (path == '/history') {
+          return dest.any((d) => d == path || d == '_activity');
+        }
+        return dest.contains(path);
+      }).toList();
+      final selected = iosDest.indexWhere((path) {
+        if (path == '/NovelLibrary') {
+          return location == path || location == '/MangaLibrary' ||
+              location == '/AnimeLibrary';
+        }
+        if (path == '/history') {
+          return location == path || location == '/updates';
+        }
+        return location == path;
+      });
+      const symbols = <String, String>{
+        '/NovelLibrary': 'books.vertical',
+        '/browse': 'globe',
+        '/history': 'clock',
+        '/more': 'gearshape',
+      };
+      const titles = <String, String>{
+        '/NovelLibrary': 'Library',
+        '/browse': 'Browse',
+        '/history': 'History',
+        '/more': 'Settings',
+      };
       return SizedBox(
         width: context.width(1),
-        height: 58 + MediaQuery.viewPaddingOf(context).bottom,
+        height: 62 + MediaQuery.viewPaddingOf(context).bottom,
         child: NativeIosBar(
           kind: 'tabs',
           data: <String, Object?>{
-            'selected': currentIndex,
+            'selected': selected < 0 ? 0 : selected,
             'items': [
-              for (var i = 0; i < dest.length; i++)
+              for (final path in iosDest)
                 <String, String>{
-                  'title': items[i] is NavigationDestination
-                      ? (items[i] as NavigationDestination).label
-                      : dest[i],
-                  'symbol': nativeNavigationSymbol(dest[i]),
+                  'title': titles[path]!,
+                  'symbol': symbols[path]!,
                 },
             ],
           },
           onSelected: (index) {
-            if (index >= 0 && index < dest.length) {
-              onDestinationSelected(dest[index]);
+            if (index >= 0 && index < iosDest.length) {
+              onDestinationSelected(iosDest[index]);
+            }
+          },
+          onAction: (action) {
+            if (action == 'search') {
+              route.push('/globalSearch', extra: (null, ItemType.novel));
             }
           },
         ),
