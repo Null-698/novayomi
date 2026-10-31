@@ -75,6 +75,12 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     refresh.addTarget(self, action: #selector(refreshRequested), for: .valueChanged)
     table.refreshControl = refresh
     root.addSubview(table)
+    // Aidoku-style edge navigation. The underlying route remains Flutter,
+    // but the gesture is recognized natively without a separate back button.
+    let backSwipe = UIScreenEdgePanGestureRecognizer(
+      target: self, action: #selector(handleBackSwipe(_:)))
+    backSwipe.edges = .left
+    root.addGestureRecognizer(backSwipe)
 
     NSLayoutConstraint.activate([
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
@@ -164,6 +170,11 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   }
 
   @objc private func refreshRequested() { send("refresh") }
+  @objc private func handleBackSwipe(_ sender: UIScreenEdgePanGestureRecognizer) {
+    guard sender.state == .ended,
+          sender.translation(in: root).x > 70 else { return }
+    send("close")
+  }
 
   func numberOfSections(in tableView: UITableView) -> Int { 2 }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
