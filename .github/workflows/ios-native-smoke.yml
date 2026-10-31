@@ -79,7 +79,7 @@ jobs:
               assert f'withId: "novayomi/{suffix}"' in app, suffix
           for path in Path('ios/Runner').glob('NovayomiNative*.swift'):
               assert f'{path.name} in Sources' in project, path.name
-          # Guard the nonblocking reader transition and native Aidoku-style chrome.
+          # Guard the nonblocking reader transition and native presentation.
           reader = Path('lib/modules/novel/native_novel_reader_screen.dart').read_text()
           swift_reader = Path('ios/Runner/NovayomiNativeReader.swift').read_text()
           details = Path('ios/Runner/NovayomiNativeNovelDetail.swift').read_text()
@@ -92,5 +92,16 @@ jobs:
           assert 'onEvent?(["type":"closeRequested"])' in swift_reader
           assert 'chapterHeader' in details and 'configureChapterHeader' in details
           assert 'NovayomiPosterGrid.swift in Sources' in project
-          print('Native reader transition, chapter header and cover grid verified.')
+          library = Path('ios/Runner/NovayomiNativeLibrary.swift').read_text()
+          browse = Path('ios/Runner/NovayomiNativeBrowse.swift').read_text()
+          settings = Path('ios/Runner/NovayomiNativeSettings.swift').read_text()
+          preferences = Path('ios/Runner/NovayomiNativePreferences.swift').read_text()
+          # Full-bleed novel covers, dynamic title, and scrolling search.
+          assert 'coverGradient' in library and 'coverCaption' in library
+          assert 'libraryHeaderHeight' in library and 'compactTitle.alpha' in library
+          assert 'libraryTitleHeader.superview !== header' in library
+          assert 'NovayomiSourceRowCell' in browse and 'loadIcon(imageURL)' in browse
+          assert 'titleHeader' in settings and 'scrollViewDidScroll' in settings
+          assert 'largeTitle.text = sectionTitle' in preferences
+          print('Native reader, scrolling library, source artwork, and settings headers verified.')
           PY
