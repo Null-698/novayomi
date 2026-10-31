@@ -38,6 +38,7 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
   private let channel: FlutterMethodChannel
   private let heading = UILabel()
   private let summary = UILabel()
+  private let scrollingHeader = UIView()
   private let table = UITableView(frame: .zero, style: .insetGrouped)
   private var downloadedOnly = false
   private var incognito = false
@@ -56,29 +57,34 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     heading.font = .preferredFont(forTextStyle: .largeTitle)
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(heading)
 
     summary.textColor = .secondaryLabel
     summary.font = .preferredFont(forTextStyle: .subheadline)
     summary.numberOfLines = 2
     summary.adjustsFontForContentSizeCategory = true
     summary.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(summary)
+    scrollingHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 118)
+    scrollingHeader.addSubview(heading)
+    scrollingHeader.addSubview(summary)
+    NSLayoutConstraint.activate([
+      heading.topAnchor.constraint(equalTo: scrollingHeader.topAnchor, constant: 20),
+      heading.leadingAnchor.constraint(equalTo: scrollingHeader.leadingAnchor, constant: 22),
+      heading.trailingAnchor.constraint(equalTo: scrollingHeader.trailingAnchor, constant: -18),
+      summary.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8),
+      summary.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
+      summary.trailingAnchor.constraint(equalTo: heading.trailingAnchor)
+    ])
+    table.tableHeaderView = scrollingHeader
 
     table.backgroundColor = .clear
     table.dataSource = self
     table.delegate = self
-    table.rowHeight = 54
+    table.rowHeight = 60
+    table.estimatedSectionHeaderHeight = 30
     table.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(table)
     NSLayoutConstraint.activate([
-      heading.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 14),
-      heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-      heading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-      summary.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8),
-      summary.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
-      summary.trailingAnchor.constraint(equalTo: heading.trailingAnchor),
-      table.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 8),
+      table.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
