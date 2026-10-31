@@ -382,7 +382,7 @@ class _NativeNovelReaderScreenState extends ConsumerState<NativeNovelReaderScree
         final id = payload['id'] as int?;
         if (id != null) unawaited(_navigate(id: id));
       case 'closeRequested':
-        unawaited(_closeFromNative());
+        _closeFromNative();
     }
     return null;
   }
