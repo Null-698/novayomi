@@ -26,7 +26,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   private let nav = UINavigationBar()
   private let navItem = UINavigationItem(title: "Novel")
   private let search = UISearchBar()
-  private let table = UITableView(frame: .zero, style: .insetGrouped)
+  private let table = UITableView(frame: .zero, style: .plain)
   private let refresh = UIRefreshControl()
   private var info: [String: Any] = [:]
   private var chapters: [[String: Any]] = []
@@ -35,6 +35,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
   private var reversed = false
   private var readChapterId: Int?
   private var favorite = false
+  private var descriptionExpanded = false
 
   init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger,
        data: [String: Any]) {
@@ -44,7 +45,12 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     super.init()
     root.backgroundColor = .systemBackground
     nav.translatesAutoresizingMaskIntoConstraints = false
-    navItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "chevron.backward"),
+    let appearance = UINavigationBarAppearance()
+    appearance.configureWithTransparentBackground()
+    nav.standardAppearance = appearance
+    nav.scrollEdgeAppearance = appearance
+    nav.compactAppearance = appearance
+    navItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "chevron.left"),
       primaryAction: UIAction { [weak self] _ in self?.send("close") })
     navItem.leftBarButtonItem?.accessibilityLabel = "Back to Library"
     nav.setItems([navItem], animated: false)
@@ -53,13 +59,14 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     search.placeholder = "Search chapters"
     search.searchBarStyle = .minimal
     search.delegate = self
-    search.translatesAutoresizingMaskIntoConstraints = false
-    root.addSubview(search)
+    search.frame = CGRect(x: 0, y: 0, width: frame.width, height: 56)
+    table.tableHeaderView = search
 
     table.translatesAutoresizingMaskIntoConstraints = false
-    table.backgroundColor = .systemGroupedBackground
+    table.backgroundColor = .systemBackground
     table.separatorStyle = .singleLine
-    table.estimatedRowHeight = 70
+    table.separatorInset = UIEdgeInsets(top: 0, left: 22, bottom: 0, right: 16)
+    table.estimatedRowHeight = 76
     table.rowHeight = UITableView.automaticDimension
     table.dataSource = self
     table.delegate = self
@@ -73,11 +80,7 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       nav.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      search.topAnchor.constraint(equalTo: nav.bottomAnchor),
-      search.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-      search.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-      search.heightAnchor.constraint(equalToConstant: 52),
-      table.topAnchor.constraint(equalTo: search.bottomAnchor),
+      table.topAnchor.constraint(equalTo: nav.bottomAnchor),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor)
@@ -174,15 +177,25 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     if indexPath.section == 0 {
       let cell = tableView.dequeueReusableCell(withIdentifier: "novel-info", for: indexPath)
         as! NovayomiNovelInfoCell
-      cell.configure(info)
+      cell.configure(info, expanded: descriptionExpanded)
       cell.onRead = { [weak self] in self?.send("resume") }
+      cell.onExpand = { [weak self] in
+        guard let self else { return }
+        self.descriptionExpanded.toggle()
+        self.table.reloadRows(at: [indexPath], with: .automatic)
+      }
       return cell
     }
     let chapter = visibleChapters[indexPath.row]
     let cell = tableView.dequeueReusableCell(withIdentifier: "novel-chapter", for: indexPath)
+    cell.backgroundColor = .systemBackground
     var configuration = UIListContentConfiguration.subtitleCell()
     configuration.text = chapter["name"] as? String ?? "Chapter"
     let isRead = chapter["read"] as? Bool ?? false
+    let bookmarked = chapter["bookmark"] as? Bool ?? false
+    let downloaded = chapter["downloaded"] as? Bool ?? false
+    configuration.image = UIImage(systemName: bookmarked ? "bookmark.fill" : downloaded ? "arrow.down.circle.fill" : "doc.text")
+    configuration.imageProperties.tintColor = bookmarked ? .systemBlue : downloaded ? .systemGreen : .tertiaryLabel
     configuration.secondaryText = [
       chapter["date"] as? String ?? "",
       chapter["scanlator"] as? String ?? "",
@@ -193,8 +206,6 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
     configuration.secondaryTextProperties.numberOfLines = 1
     cell.contentConfiguration = configuration
     let id = chapter["id"] as? Int ?? -1
-    let bookmarked = chapter["bookmark"] as? Bool ?? false
-    let downloaded = chapter["downloaded"] as? Bool ?? false
     cell.accessoryView = nil
     let button = UIButton(type: .system)
     button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
@@ -261,11 +272,13 @@ private final class NovayomiNovelDetailView: NSObject, FlutterPlatformView,
 /// The native header reads existing Manga fields without a second backend.
 private final class NovayomiNovelInfoCell: UITableViewCell {
   var onRead: (() -> Void)?
+  var onExpand: (() -> Void)?
   private let cover = UIImageView()
   private let heading = UILabel()
   private let detail = UILabel()
   private let descriptionLabel = UILabel()
   private let genres = UILabel()
+  private let expandButton = UIButton(type: .system)
   private let readButton = UIButton(type: .system)
   private var coverRequest: URLSessionDataTask?
   private var coverKey: String = ""
@@ -273,7 +286,7 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
     selectionStyle = .none
-    cover.layer.cornerRadius = 10
+    cover.layer.cornerRadius = 12
     cover.clipsToBounds = true
     cover.contentMode = .scaleAspectFill
     cover.backgroundColor = .secondarySystemGroupedBackground
@@ -282,19 +295,25 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     cover.heightAnchor.constraint(equalToConstant: 164).isActive = true
 
     heading.font = .preferredFont(forTextStyle: .title2)
+    heading.font = .systemFont(ofSize: 25, weight: .bold)
     heading.numberOfLines = 3
     heading.adjustsFontForContentSizeCategory = true
     detail.font = .preferredFont(forTextStyle: .subheadline)
     detail.textColor = .secondaryLabel
-    detail.numberOfLines = 4
+    detail.numberOfLines = 3
     descriptionLabel.font = .preferredFont(forTextStyle: .body)
     descriptionLabel.numberOfLines = 0
     descriptionLabel.adjustsFontForContentSizeCategory = true
     genres.font = .preferredFont(forTextStyle: .footnote)
     genres.textColor = .secondaryLabel
     genres.numberOfLines = 2
+    expandButton.setTitle("Show more", for: .normal)
+    expandButton.contentHorizontalAlignment = .leading
+    expandButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+    expandButton.addTarget(self, action: #selector(expandTapped), for: .touchUpInside)
     readButton.configuration = .filled()
-    readButton.setTitle("Read / Continue", for: .normal)
+    readButton.configuration?.cornerStyle = .large
+    readButton.setTitle("Continue reading", for: .normal)
     readButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     readButton.addTarget(self, action: #selector(readTapped), for: .touchUpInside)
 
@@ -306,16 +325,16 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     row.axis = .horizontal
     row.alignment = .top
     row.spacing = 14
-    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, genres, readButton])
+    let column = UIStackView(arrangedSubviews: [row, descriptionLabel, expandButton, genres, readButton])
     column.axis = .vertical
     column.spacing = 14
     column.translatesAutoresizingMaskIntoConstraints = false
     contentView.addSubview(column)
     NSLayoutConstraint.activate([
-      column.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-      column.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-      column.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
-      column.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+      column.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor, constant: 6),
+      column.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor, constant: -6),
+      column.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
+      column.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -22)
     ])
   }
   required init?(coder: NSCoder) { fatalError("Storyboard unsupported") }
@@ -327,9 +346,10 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverKey = ""
     cover.image = UIImage(systemName: "book.closed")
     onRead = nil
+    onExpand = nil
   }
 
-  func configure(_ data: [String: Any]) {
+  func configure(_ data: [String: Any], expanded: Bool) {
     heading.text = data["title"] as? String ?? "Untitled"
     let info = [
       data["author"] as? String ?? "",
@@ -342,9 +362,12 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
        options: .regularExpression)
       .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
       .trimmingCharacters(in: .whitespacesAndNewlines)
-    descriptionLabel.text = String(plain.prefix(950))
+    descriptionLabel.text = plain
+    descriptionLabel.numberOfLines = expanded ? 0 : 4
     descriptionLabel.isHidden = plain.isEmpty
-    genres.text = (data["genres"] as? [String] ?? []).prefix(10).joined(separator: " · ")
+    expandButton.isHidden = plain.count < 180
+    expandButton.setTitle(expanded ? "Show less" : "Show more", for: .normal)
+    genres.text = (data["genres"] as? [String] ?? []).prefix(6).map { "  \($0)  " }.joined(separator: "  ·  ")
     genres.isHidden = genres.text?.isEmpty ?? true
     readButton.isEnabled = (data["chapterCount"] as? Int ?? 0) > 0
 
@@ -372,4 +395,5 @@ private final class NovayomiNovelInfoCell: UITableViewCell {
     coverRequest?.resume()
   }
   @objc private func readTapped() { onRead?() }
+  @objc private func expandTapped() { onExpand?() }
 }
