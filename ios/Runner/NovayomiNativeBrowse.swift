@@ -27,7 +27,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   private let backButton = UIButton(type: .system)
   private let search = UISearchBar()
   private let segments = UISegmentedControl(items: ["Sources", "Extensions"])
-  private let table = UITableView(frame: .zero, style: .insetGrouped)
+  private let table = UITableView(frame: .zero, style: .plain)
   private let grid = NovayomiPosterGrid(style: .sources)
   private let layoutButton = UIButton(type: .system)
   private var showGrid = UserDefaults.standard.bool(forKey: "novayomi.browse.grid")
@@ -49,7 +49,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     channel = FlutterMethodChannel(name: "novayomi/native-browse/\(id)",
                                    binaryMessenger: messenger)
     super.init()
-    root.backgroundColor = .systemGroupedBackground
+    root.backgroundColor = .systemBackground
     let extensionLanding = data["initialSegment"] as? Int == 1
     backButton.setImage(UIImage(systemName: "chevron.backward"), for: .normal)
     backButton.accessibilityLabel = "Back"
@@ -81,8 +81,10 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
 
     table.dataSource = self
     table.delegate = self
-    table.backgroundColor = .clear
-    table.rowHeight = 60
+    table.backgroundColor = .systemBackground
+    table.rowHeight = 78
+    table.separatorInset = UIEdgeInsets(top: 0, left: 82, bottom: 0, right: 16)
+    table.sectionHeaderTopPadding = 10
     table.keyboardDismissMode = .onDrag
     table.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(table)
@@ -209,6 +211,9 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   }
 
   func numberOfSections(in tableView: UITableView) -> Int { 1 }
+  func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    segments.selectedSegmentIndex == 0 ? "Sources" : "Extensions"
+  }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     if segments.selectedSegmentIndex == 1 {
       return filteredExtensions.count + extensionActions.filter { text.isEmpty ||
@@ -219,13 +224,16 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
   }
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     let cell = tableView.dequeueReusableCell(withIdentifier: "source")
-      ?? UITableViewCell(style: .subtitle, reuseIdentifier: "source")
+      as? NovayomiSourceRowCell
+      ?? NovayomiSourceRowCell(style: .subtitle, reuseIdentifier: "source")
     let label: String
     let subtitle: String
     let symbol: String
+    var imageURL: String?
     if segments.selectedSegmentIndex == 1 {
       if indexPath.row < filteredExtensions.count {
         let item = filteredExtensions[indexPath.row]
+        imageURL = item["icon"] as? String
         label = item["name"] as? String ?? "Extension"
         let installed = item["installed"] as? Bool ?? false
         let updated = item["updateAvailable"] as? Bool ?? false
@@ -247,6 +255,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       symbol = "books.vertical"
     } else {
       let source = filtered[indexPath.row]
+      imageURL = source["icon"] as? String
       label = source["name"] as? String ?? "Source"
       subtitle = source["lang"] as? String ?? ""
       symbol = source["pinned"] as? Bool == true ? "pin.fill" : "books.vertical"
@@ -255,8 +264,12 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     content.text = label
     content.secondaryText = subtitle
     content.image = UIImage(systemName: symbol)
-    content.imageProperties.tintColor = root.tintColor
+    content.imageProperties.tintColor = .secondaryLabel
+    content.imageProperties.maximumSize = CGSize(width: 48, height: 48)
+    content.textProperties.font = .preferredFont(forTextStyle: .body)
+    content.secondaryTextProperties.color = .secondaryLabel
     cell.contentConfiguration = content
+    cell.loadIcon(imageURL)
     cell.accessoryView = nil
     cell.accessoryType = .disclosureIndicator
     if segments.selectedSegmentIndex == 1 && indexPath.row < filteredExtensions.count,
@@ -264,9 +277,18 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       let item = filteredExtensions[indexPath.row]
       let installed = item["installed"] as? Bool ?? false
       let action = UIButton(type: .system)
-      action.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
-      action.accessibilityLabel = "Extension actions"
-      action.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+      action.accessibilityLabel = installed ? "Extension actions" : "Install extension"
+      action.frame = CGRect(x: 0, y: 0, width: installed ? 44 : 76, height: 40)
+      if !installed {
+        var config = UIButton.Configuration.tinted()
+        config.title = "Get"
+        config.cornerStyle = .capsule
+        action.configuration = config
+        action.addAction(UIAction { [weak self] _ in
+          self?.channel.invokeMethod("updateExtension", arguments: id)
+        }, for: .touchUpInside)
+      } else {
+      action.setImage(UIImage(systemName: "ellipsis"), for: .normal)
       action.showsMenuAsPrimaryAction = true
       action.menu = UIMenu(children: [
         UIAction(title: installed ? "Settings" : "Install",
@@ -281,6 +303,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
           [weak self] _ in self?.confirmUninstall(id: id)
         }
       ])
+      }
       cell.accessoryView = action
       cell.accessoryType = .none
     }
@@ -370,5 +393,51 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     }
     pin.backgroundColor = .systemBlue
     return UISwipeActionsConfiguration(actions: [pin])
+  }
+}
+
+
+/// Reuse-safe remote source artwork, using the same request/cache strategy as
+/// the library covers. Source icons are actual artwork instead of SF placeholders.
+private final class NovayomiSourceRowCell: UITableViewCell {
+  private static let images = NSCache<NSString, UIImage>()
+  private var imageRequest: URLSessionDataTask?
+  private var representedIcon: String?
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    imageRequest?.cancel()
+    imageRequest = nil
+    representedIcon = nil
+    accessoryView = nil
+  }
+
+  func loadIcon(_ path: String?) {
+    imageRequest?.cancel()
+    imageRequest = nil
+    representedIcon = path
+    guard let path, let url = URL(string: path),
+          ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return }
+    if let image = Self.images.object(forKey: path as NSString) {
+      updateIcon(image)
+      return
+    }
+    imageRequest = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+      guard let data, let image = UIImage(data: data) else { return }
+      Self.images.setObject(image, forKey: path as NSString)
+      DispatchQueue.main.async {
+        guard let self, self.representedIcon == path else { return }
+        self.updateIcon(image)
+      }
+    }
+    imageRequest?.resume()
+  }
+
+  private func updateIcon(_ image: UIImage) {
+    guard var configuration = contentConfiguration as? UIListContentConfiguration else { return }
+    configuration.image = image
+    configuration.imageProperties.maximumSize = CGSize(width: 48, height: 48)
+    configuration.imageProperties.cornerRadius = 11
+    contentConfiguration = configuration
   }
 }
