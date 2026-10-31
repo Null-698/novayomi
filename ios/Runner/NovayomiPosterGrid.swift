@@ -51,6 +51,10 @@ final class NovayomiPosterGrid: UIView, UICollectionViewDataSource,
     collection.reloadData()
   }
   func finishRefresh() { refresh.endRefreshing() }
+  func reserveBottomSpace(_ height: CGFloat) {
+    collection.contentInset.bottom = max(26, height)
+    collection.verticalScrollIndicatorInsets.bottom = max(0, height - 26)
+  }
   @objc private func refreshRequested() { onRefresh?() }
 
   func numberOfSections(in collectionView: UICollectionView) -> Int { 1 }
