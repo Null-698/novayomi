@@ -85,6 +85,7 @@ jobs:
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeSettings.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativePreferences.swift
           xcrun swiftc -frontend -parse ios/Runner/NovayomiNativeSourceResults.swift
+          xcrun swiftc -frontend -parse ios/Runner/NovayomiPosterGrid.swift
 
       - name: Build unsigned iOS IPA
         env:
