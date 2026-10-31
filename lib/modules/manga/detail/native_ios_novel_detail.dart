@@ -225,7 +225,12 @@ class _NativeIosNovelDetailState extends ConsumerState<NativeIosNovelDetail> {
               },
         ],
       };
+      // Bound the UI-only snapshot cache; long chapter lists can be large.
+      _lastPayloadByManga.remove(widget.mangaId);
       _lastPayloadByManga[widget.mangaId] = _payload;
+      while (_lastPayloadByManga.length > 3) {
+        _lastPayloadByManga.remove(_lastPayloadByManga.keys.first);
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _channel != null) {
