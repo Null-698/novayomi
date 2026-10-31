@@ -9,6 +9,13 @@
 > [!WARNING]
 > Novayomi does not host novels or provide novel content. Novel sources are external and are not affiliated with this project.
 
+## UI/UX for now....
+
+- im rewriting UI/UX in swift
+- i will use ai to help me speed up dont like dont use it
+- it is in early alpha stages, so nothing is polished
+- YES this will only focus on novel side eveything other than novel will be removed anime,manga etc.
+
 ## Features
 
 - Read novels from supported sources or local files.
