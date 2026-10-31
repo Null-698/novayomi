@@ -78,8 +78,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     channel = FlutterMethodChannel(name: "novayomi/native-library/\(identifier)",
                                     binaryMessenger: messenger)
     let flow = UICollectionViewFlowLayout()
-    flow.minimumInteritemSpacing = 10
-    flow.minimumLineSpacing = 16
+    flow.minimumInteritemSpacing = 12
+    flow.minimumLineSpacing = 14
     collection = UICollectionView(frame: .zero, collectionViewLayout: flow)
     let continueFlow = UICollectionViewFlowLayout()
     continueFlow.scrollDirection = .horizontal
@@ -854,11 +854,11 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     if isList { return CGSize(width: max(1, width - 28), height: 92) }
     let columns: CGFloat = gridSize > 0
       ? CGFloat(min(max(gridSize, 1), 7))
-      : (width > 700 ? 6 : width > 450 ? 4 : 3)
-    let itemWidth = max(65, floor((width - 36 - (columns - 1) * 10) / columns))
-    let labelHeight: CGFloat = displayMode == 0 ? 36 : 0
+      : (width > 700 ? 5 : width > 450 ? 3 : 2)
+    let itemWidth = max(65, floor((width - 36 - (columns - 1) * 12) / columns))
+    let labelHeight: CGFloat = 0
     let coverHeight = displayMode == 1 ? itemWidth * 1.57 : itemWidth * 1.44
-    return CGSize(width: itemWidth, height: coverHeight + labelHeight + 8)
+    return CGSize(width: itemWidth, height: coverHeight + (isList ? labelHeight : 0))
   }
 
   func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
@@ -894,6 +894,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
 private final class NovayomiLibraryCell: UICollectionViewCell {
   private static let images = NSCache<NSString, UIImage>()
   private let cover = UIImageView()
+  private let coverGradient = CAGradientLayer()
+  private let coverCaption = UILabel()
   private let title = UILabel()
   private let author = UILabel()
   private let topLeftBadges = UIStackView()
@@ -922,6 +924,20 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     cover.clipsToBounds = true
     cover.layer.cornerRadius = 8
     cover.backgroundColor = .secondarySystemGroupedBackground
+    coverGradient.colors = [
+      UIColor.clear.cgColor,
+      UIColor.black.withAlphaComponent(0.18).cgColor,
+      UIColor.black.withAlphaComponent(0.86).cgColor
+    ]
+    coverGradient.locations = [0, 0.52, 1]
+    cover.layer.addSublayer(coverGradient)
+    coverCaption.font = .systemFont(ofSize: 15, weight: .semibold)
+    coverCaption.numberOfLines = 2
+    coverCaption.textColor = .white
+    coverCaption.shadowColor = UIColor.black.withAlphaComponent(0.3)
+    coverCaption.shadowOffset = CGSize(width: 0, height: 1)
+    coverCaption.translatesAutoresizingMaskIntoConstraints = false
+    cover.addSubview(coverCaption)
     topLeftBadges.axis = .horizontal
     topLeftBadges.alignment = .top
     topLeftBadges.spacing = 3
@@ -960,6 +976,9 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     readingProgress.translatesAutoresizingMaskIntoConstraints = false
     cover.addSubview(readingProgress)
     NSLayoutConstraint.activate([
+      coverCaption.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 9),
+      coverCaption.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -9),
+      coverCaption.bottomAnchor.constraint(equalTo: cover.bottomAnchor, constant: -12),
       readingProgress.leadingAnchor.constraint(equalTo: cover.leadingAnchor),
       readingProgress.trailingAnchor.constraint(equalTo: cover.trailingAnchor),
       readingProgress.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
@@ -1030,6 +1049,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     contentView.layer.borderColor = UIColor.systemBlue.cgColor
     contentView.layer.cornerRadius = 9
     title.text = item["name"] as? String ?? "Untitled"
+    coverCaption.text = title.text
     author.text = item["author"] as? String ?? ""
     let unread = item["unreadCount"] as? Int ?? 0
     let downloaded = item["downloadedCount"] as? Int ?? 0
@@ -1058,7 +1078,12 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     }
     cover.image = UIImage(systemName: "book.closed")
 
-    textStack.isHidden = !isList && (displayMode == 1 || displayMode == 2)
+    // Use full-height cover cards; keep accessible metadata in list mode.
+    let fullBleed = !isList
+    textStack.isHidden = fullBleed
+    coverCaption.isHidden = !fullBleed
+    coverGradient.isHidden = !fullBleed
+    resume.isHidden = fullBleed || !(item["showContinue"] as? Bool ?? false)
     if isList {
       coverHeight.constant = 78
       coverWidth.isActive = true
@@ -1106,6 +1131,7 @@ private final class NovayomiLibraryCell: UICollectionViewCell {
     if stack.axis == .vertical {
       coverHeight.constant = max(80, bounds.width * (currentDisplayMode == 1 ? 1.57 : 1.44))
     }
+    coverGradient.frame = cover.bounds
   }
 }
 
