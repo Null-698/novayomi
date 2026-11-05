@@ -125,6 +125,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
         config = .tinted()
       }
       config.cornerStyle = .capsule
+      config.image = UIImage(systemName: button === notificationButton
+        ? "bell" : "ellipsis")
       button.configuration = config
       button.tintColor = .label
     }

@@ -75,10 +75,12 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     if #available(iOS 26.0, *) {
       var backGlass = UIButton.Configuration.glass()
       backGlass.cornerStyle = .capsule
+      backGlass.image = UIImage(systemName: "chevron.backward")
       backButton.configuration = backGlass
     } else {
       var backFallback = UIButton.Configuration.tinted()
       backFallback.cornerStyle = .capsule
+      backFallback.image = UIImage(systemName: "chevron.backward")
       backButton.configuration = backFallback
     }
     backButton.tintColor = .label
@@ -90,6 +92,8 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
         config = .tinted()
       }
       config.cornerStyle = .capsule
+      config.image = UIImage(systemName: button === layoutButton
+        ? "arrow.left.arrow.right" : "plus")
       button.configuration = config
       button.tintColor = .label
       button.translatesAutoresizingMaskIntoConstraints = false
