@@ -314,10 +314,14 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     }
   }
 
-  private func filterChip(_ text: String, icon: String? = nil) -> UIButton {
+  private func filterChip(_ text: String, icon: String? = nil,
+                          selected: Bool = false) -> UIButton {
     let button = UIButton(type: .system)
     var config = UIButton.Configuration.tinted()
     config.cornerStyle = .capsule
+    config.baseForegroundColor = selected ? .novayomiAccent : .label
+    config.baseBackgroundColor = selected
+      ? UIColor.novayomiAccent.withAlphaComponent(0.18) : .secondarySystemFill
     config.title = text
     config.image = icon.flatMap { UIImage(systemName: $0) }
     config.imagePadding = 6
@@ -388,7 +392,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     filterStack.addArrangedSubview(layout)
 
     let sortNames = ["Source order", "Title A–Z", "Title Z–A"]
-    let sort = filterChip(sortMode == 0 ? "Sort" : sortNames[sortMode], icon: "chevron.down")
+    let sort = filterChip(sortMode == 0 ? "Sort" : sortNames[sortMode],
+      icon: "chevron.down", selected: sortMode != 0)
     sort.accessibilityLabel = "Sort results"
     sort.menu = UIMenu(children: sortNames.enumerated().map { index, name in
       UIAction(title: name, state: index == sortMode ? .on : .off) { [weak self] _ in
@@ -405,7 +410,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     })).sorted()
     if let value = selectedStatus, !statuses.contains(value) { selectedStatus = nil }
     let status = filterChip(
-      selectedStatus.map(titleForStatus) ?? "Status", icon: "chevron.down")
+      selectedStatus.map(titleForStatus) ?? "Status",
+      icon: "chevron.down", selected: selectedStatus != nil)
     status.accessibilityLabel = "Filter publication status"
     var statusActions = [UIAction(title: "All statuses",
       state: selectedStatus == nil ? .on : .off) { [weak self] _ in
@@ -433,7 +439,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
       .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     if let value = selectedGenre, !genres.contains(value) { selectedGenre = nil }
-    let genre = filterChip(selectedGenre ?? "Genre", icon: "chevron.down")
+    let genre = filterChip(selectedGenre ?? "Genre",
+      icon: "chevron.down", selected: selectedGenre != nil)
     genre.accessibilityLabel = "Filter novel genres"
     var genreActions = [UIAction(title: "All genres",
       state: selectedGenre == nil ? .on : .off) { [weak self] _ in
