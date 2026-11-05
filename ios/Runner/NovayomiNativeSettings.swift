@@ -80,7 +80,8 @@ private final class NovayomiNativeSettingsView: NSObject, FlutterPlatformView,
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
     largeTitle.text = "Settings"
-    largeTitle.font = .preferredFont(forTextStyle: .largeTitle)
+    largeTitle.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+      for: .systemFont(ofSize: 36, weight: .bold))
     largeTitle.adjustsFontForContentSizeCategory = true
     largeTitle.translatesAutoresizingMaskIntoConstraints = false
     titleHeader.frame = CGRect(x: 0, y: 0, width: frame.width, height: 148)

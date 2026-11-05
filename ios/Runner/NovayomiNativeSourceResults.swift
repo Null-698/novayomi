@@ -108,7 +108,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     root.addSubview(nav)
 
     largeTitle.text = data["title"] as? String ?? "Source"
-    largeTitle.font = .preferredFont(forTextStyle: .largeTitle)
+    largeTitle.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+      for: .systemFont(ofSize: 36, weight: .bold))
     largeTitle.adjustsFontForContentSizeCategory = true
     largeTitle.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(largeTitle)

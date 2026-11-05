@@ -95,7 +95,8 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     root.backgroundColor = .systemBackground
     root.tintColor = .novayomiAccent
     heading.text = "Library"
-    heading.font = .preferredFont(forTextStyle: .largeTitle)
+    heading.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+      for: .systemFont(ofSize: 36, weight: .bold))
     heading.adjustsFontForContentSizeCategory = true
     total.font = .preferredFont(forTextStyle: .footnote)
     total.textColor = .secondaryLabel

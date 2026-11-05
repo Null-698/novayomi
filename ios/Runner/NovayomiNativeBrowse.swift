@@ -62,7 +62,8 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     backButton.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(backButton)
     heading.text = extensionLanding ? "Extensions" : "Browse"
-    heading.font = .preferredFont(forTextStyle: .largeTitle)
+    heading.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+      for: .systemFont(ofSize: 36, weight: .bold))
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(heading)

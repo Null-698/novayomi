@@ -60,7 +60,8 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     root.backgroundColor = .systemGroupedBackground
     root.tintColor = .novayomiAccent
     heading.text = "Settings"
-    heading.font = .preferredFont(forTextStyle: .largeTitle)
+    heading.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+      for: .systemFont(ofSize: 36, weight: .bold))
     heading.adjustsFontForContentSizeCategory = true
     heading.translatesAutoresizingMaskIntoConstraints = false
 
