@@ -118,9 +118,15 @@ private final class NovayomiLibraryView: NSObject, FlutterPlatformView,
     notificationButton.accessibilityLabel = "Library updates"
     notificationButton.addTarget(self, action: #selector(openUpdates), for: .touchUpInside)
     for button in [notificationButton, actionsButton] {
-      var config = UIButton.Configuration.tinted()
+      var config: UIButton.Configuration
+      if #available(iOS 26.0, *) {
+        config = .glass()
+      } else {
+        config = .tinted()
+      }
       config.cornerStyle = .capsule
       button.configuration = config
+      button.tintColor = .label
     }
 
     let labels = UIStackView(arrangedSubviews: [heading, total])

@@ -70,10 +70,28 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     layoutButton.setImage(UIImage(systemName: "arrow.left.arrow.right"), for: .normal)
     layoutButton.accessibilityLabel = "Switch sources and extensions"
     layoutButton.addTarget(self, action: #selector(toggleSourcesAndExtensions), for: .touchUpInside)
+    // Use the actual system Liquid Glass button style on supported iOS,
+    // not a tinted Flutter-like imitation of the material.
+    if #available(iOS 26.0, *) {
+      var backGlass = UIButton.Configuration.glass()
+      backGlass.cornerStyle = .capsule
+      backButton.configuration = backGlass
+    } else {
+      var backFallback = UIButton.Configuration.tinted()
+      backFallback.cornerStyle = .capsule
+      backButton.configuration = backFallback
+    }
+    backButton.tintColor = .label
     for button in [layoutButton, addButton] {
-      var config = UIButton.Configuration.tinted()
+      var config: UIButton.Configuration
+      if #available(iOS 26.0, *) {
+        config = .glass()
+      } else {
+        config = .tinted()
+      }
       config.cornerStyle = .capsule
       button.configuration = config
+      button.tintColor = .label
       button.translatesAutoresizingMaskIntoConstraints = false
       root.addSubview(button)
     }
