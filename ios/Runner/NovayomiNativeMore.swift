@@ -93,6 +93,10 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     table.rowHeight = UITableView.automaticDimension
     table.estimatedRowHeight = 65
     table.keyboardDismissMode = .onDrag
+    // Keep the last grouped settings row fully reachable above the
+    // persistent floating iOS tabs. Do not simply shorten the table.
+    table.contentInset.bottom = 114
+    table.verticalScrollIndicatorInsets.bottom = 114
     table.sectionHeaderTopPadding = 12
     table.estimatedSectionHeaderHeight = 30
     table.translatesAutoresizingMaskIntoConstraints = false
