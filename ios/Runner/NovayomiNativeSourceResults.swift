@@ -333,6 +333,16 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   /// engine. Filtering never changes the source's paging or search algorithm.
   private func rebuildResultFilters() {
     var indices = Array(novels.indices)
+    // Clear filters that aren't represented in newly fetched results before
+    // applying them, otherwise a new search can look permanently empty.
+    if let status = selectedStatus,
+       !novels.contains(where: { $0["status"] as? String == status }) {
+      selectedStatus = nil
+    }
+    if let genre = selectedGenre,
+       !novels.contains(where: { ($0["genres"] as? [String] ?? []).contains(genre) }) {
+      selectedGenre = nil
+    }
     if !homeMode {
       if let status = selectedStatus {
         indices = indices.filter {
@@ -546,12 +556,21 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       config.text = item["title"] as? String ?? "Novel"
       let summary = item["description"] as? String ?? ""
       let source = item["source"] as? String ?? ""
-      config.secondaryText = globalMode && !source.isEmpty
-        ? source + (summary.isEmpty ? "" : " · " + summary)
-        : summary
+      let chapter = item["chapter"] as? String ?? ""
+      // Source Home renders the latest chapter beneath its cover and title.
+      // Fall back to the source's actual metadata when the extension does
+      // not provide a chapter number in its latest-updates result.
+      if homeMode && !chapter.isEmpty {
+        config.secondaryText = chapter
+      } else {
+        config.secondaryText = globalMode && !source.isEmpty
+          ? source + (summary.isEmpty ? "" : " · " + summary)
+          : summary
+      }
       config.secondaryTextProperties.numberOfLines = 2
       config.image = UIImage(systemName: "book.closed")
-      config.imageProperties.maximumSize = CGSize(width: 48, height: 70)
+      config.imageProperties.maximumSize = homeMode
+        ? CGSize(width: 66, height: 92) : CGSize(width: 48, height: 70)
       if let urlText = item["cover"] as? String,
          let url = URL(string: urlText),
          ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
