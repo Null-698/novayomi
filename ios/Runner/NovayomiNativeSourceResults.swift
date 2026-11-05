@@ -27,6 +27,14 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private let nav = UINavigationBar()
   private let navItem = UINavigationItem(title: "Novels")
   private let search = UISearchBar()
+  private let closeSearch = UIButton(type: .system)
+  private let filterScroll = UIScrollView()
+  private let filterStack = UIStackView()
+  private var filterHeight: NSLayoutConstraint!
+  private var searchTopNormal: NSLayoutConstraint!
+  private var searchTopGlobal: NSLayoutConstraint!
+  private var searchTrailingNormal: NSLayoutConstraint!
+  private var searchTrailingGlobal: NSLayoutConstraint!
   private let segmented = UISegmentedControl(items: ["Home", "Ranking"])
   private let largeTitle = UILabel()
   private let homeHeader = UIView()
@@ -40,6 +48,10 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private var showGrid = UserDefaults.standard.bool(forKey: "novayomi.results.grid")
   private let refresh = UIRefreshControl()
   private var novels: [[String: Any]] = []
+  private var visibleIndices: [Int] = []
+  private var sortMode = 0
+  private var selectedStatus: String?
+  private var selectedGenre: String?
   private var featured: [[String: Any]] = []
   private var featuredCount = 0
   private var homeMode = false
@@ -100,6 +112,25 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     search.delegate = self
     search.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(search)
+    // Aidoku's search results use the search field itself as the header,
+    // with a close control and a horizontally scrollable filter strip.
+    closeSearch.setImage(UIImage(systemName: "xmark"), for: .normal)
+    closeSearch.accessibilityLabel = "Close search"
+    var closeConfig = UIButton.Configuration.tinted()
+    closeConfig.cornerStyle = .capsule
+    closeSearch.configuration = closeConfig
+    closeSearch.addTarget(self, action: #selector(closeGlobalSearch), for: .touchUpInside)
+    closeSearch.translatesAutoresizingMaskIntoConstraints = false
+    closeSearch.isHidden = true
+    root.addSubview(closeSearch)
+    filterStack.axis = .horizontal
+    filterStack.alignment = .center
+    filterStack.spacing = 8
+    filterStack.translatesAutoresizingMaskIntoConstraints = false
+    filterScroll.showsHorizontalScrollIndicator = false
+    filterScroll.translatesAutoresizingMaskIntoConstraints = false
+    filterScroll.addSubview(filterStack)
+    root.addSubview(filterScroll)
     segmented.selectedSegmentIndex = 0
     segmented.selectedSegmentTintColor = .novayomiAccent
     segmented.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
@@ -130,6 +161,14 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     }
     floatingTabs.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(floatingTabs)
+    searchTopNormal = search.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 4)
+    searchTopGlobal = search.topAnchor.constraint(
+      equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 9)
+    searchTrailingNormal = search.trailingAnchor.constraint(
+      equalTo: root.trailingAnchor, constant: -8)
+    searchTrailingGlobal = search.trailingAnchor.constraint(
+      equalTo: closeSearch.leadingAnchor, constant: -6)
+    filterHeight = filterScroll.heightAnchor.constraint(equalToConstant: 0)
     NSLayoutConstraint.activate([
       nav.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
       nav.leadingAnchor.constraint(equalTo: root.leadingAnchor),
@@ -140,10 +179,23 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       segmented.topAnchor.constraint(equalTo: largeTitle.bottomAnchor, constant: 14),
       segmented.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
       segmented.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-      search.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 4),
+      searchTopNormal,
+      searchTrailingNormal,
       search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
-      search.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
-      table.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 4),
+      closeSearch.centerYAnchor.constraint(equalTo: search.centerYAnchor),
+      closeSearch.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
+      closeSearch.widthAnchor.constraint(equalToConstant: 50),
+      closeSearch.heightAnchor.constraint(equalToConstant: 50),
+      filterScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 1),
+      filterScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+      filterScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
+      filterHeight,
+      filterStack.leadingAnchor.constraint(equalTo: filterScroll.contentLayoutGuide.leadingAnchor),
+      filterStack.trailingAnchor.constraint(equalTo: filterScroll.contentLayoutGuide.trailingAnchor),
+      filterStack.topAnchor.constraint(equalTo: filterScroll.contentLayoutGuide.topAnchor),
+      filterStack.bottomAnchor.constraint(equalTo: filterScroll.contentLayoutGuide.bottomAnchor),
+      filterStack.heightAnchor.constraint(equalTo: filterScroll.frameLayoutGuide.heightAnchor),
+      table.topAnchor.constraint(equalTo: filterScroll.bottomAnchor, constant: 4),
       table.leadingAnchor.constraint(equalTo: root.leadingAnchor),
       table.trailingAnchor.constraint(equalTo: root.trailingAnchor),
       table.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -164,9 +216,15 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       search.placeholder = "Search all novel sources"
       search.text = data["query"] as? String ?? ""
       segmented.isHidden = true
-      largeTitle.text = "Search"
-      navItem.rightBarButtonItems = [layoutItem].compactMap { $0 }
+      largeTitle.isHidden = true
+      nav.isHidden = true
+      closeSearch.isHidden = false
+      searchTopNormal.isActive = false
+      searchTrailingNormal.isActive = false
+      searchTopGlobal.isActive = true
+      searchTrailingGlobal.isActive = true
       searchHeight.constant = 52
+      filterHeight.constant = 50
     }
     apply(data)
     channel.setMethodCallHandler { [weak self] call, result in
@@ -243,6 +301,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     }
     table.backgroundView = novels.isEmpty ? empty : nil
   }
+  @objc private func closeGlobalSearch() { send("close") }
   @objc private func toggleLayout() {
     showGrid.toggle()
     UserDefaults.standard.set(showGrid, forKey: "novayomi.results.grid")
