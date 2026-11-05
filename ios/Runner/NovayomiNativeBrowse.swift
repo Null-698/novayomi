@@ -119,7 +119,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     // Leave enough real scroll space for the last installed source.
     table.contentInset.bottom = 108
     table.verticalScrollIndicatorInsets.bottom = 108
-    table.separatorInset = UIEdgeInsets(top: 0, left: 82, bottom: 0, right: 16)
+    table.separatorInset = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 16)
     table.sectionHeaderTopPadding = 10
     table.keyboardDismissMode = .onDrag
     table.translatesAutoresizingMaskIntoConstraints = false
@@ -208,7 +208,9 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     var posters: [[String: Any]] = []
     if segments.selectedSegmentIndex == 0 {
       posters = filtered
-      posters.append(["name": "Local novels", "lang": "Imported EPUBs"])
+      if showLocalNovels {
+        posters.append(["name": "Local novels", "lang": "Imported EPUBs"])
+      }
     } else {
       posters = filteredExtensions
       for entry in filteredExtensionActions {
@@ -216,6 +218,20 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       }
     }
     grid.display(posters)
+  }
+
+  private var showLocalNovels: Bool {
+    let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return query.isEmpty || "Local novels".localizedCaseInsensitiveContains(query)
+  }
+
+  private func displayLanguage(_ code: String) -> String {
+    switch code.lowercased() {
+    case "", "all", "multi", "multilingual": return "Multi-Language"
+    default:
+      return Locale(identifier: "en").localizedString(forLanguageCode: code)
+        ?? code.uppercased()
+    }
   }
 
   private var filteredExtensionActions: [(String, String, String)] {
@@ -263,7 +279,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
         $0.0.localizedCaseInsensitiveContains(text) }.count
     }
     // Local imports always remain visible without a remotely installed source.
-    return filtered.count + 1
+    return filtered.count + (showLocalNovels ? 1 : 0)
   }
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     let cell = tableView.dequeueReusableCell(withIdentifier: "source")
@@ -280,7 +296,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
         label = item["name"] as? String ?? "Extension"
         let installed = item["installed"] as? Bool ?? false
         let updated = item["updateAvailable"] as? Bool ?? false
-        subtitle = (item["lang"] as? String ?? "") + " · " +
+        subtitle = displayLanguage(item["lang"] as? String ?? "") + " · " +
           (updated ? "Update available" : installed ? "Installed" : "Not installed")
         symbol = updated ? "arrow.down.circle" :
           installed ? "checkmark.seal" : "puzzlepiece.extension"
@@ -300,7 +316,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       let source = filtered[indexPath.row]
       imageURL = source["icon"] as? String
       label = source["name"] as? String ?? "Source"
-      subtitle = source["lang"] as? String ?? ""
+      subtitle = displayLanguage(source["lang"] as? String ?? "")
       symbol = source["pinned"] as? Bool == true ? "pin.fill" : "books.vertical"
     }
     var content = cell.defaultContentConfiguration()
@@ -318,7 +334,8 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     content.secondaryText = subtitle
     content.image = UIImage(systemName: symbol)
     content.imageProperties.tintColor = .secondaryLabel
-    content.imageProperties.maximumSize = CGSize(width: 48, height: 48)
+    content.imageProperties.maximumSize = CGSize(width: 56, height: 56)
+    content.imageProperties.cornerRadius = 12
     content.textProperties.font = .preferredFont(forTextStyle: .body)
     content.secondaryTextProperties.color = .secondaryLabel
     cell.contentConfiguration = content
@@ -381,7 +398,7 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
       }
       return
     }
-    if index == filtered.count {
+    if index == filtered.count && showLocalNovels {
       channel.invokeMethod("action", arguments: "local")
       return
     }
@@ -489,8 +506,8 @@ private final class NovayomiSourceRowCell: UITableViewCell {
   private func updateIcon(_ image: UIImage) {
     guard var configuration = contentConfiguration as? UIListContentConfiguration else { return }
     configuration.image = image
-    configuration.imageProperties.maximumSize = CGSize(width: 48, height: 48)
-    configuration.imageProperties.cornerRadius = 11
+    configuration.imageProperties.maximumSize = CGSize(width: 56, height: 56)
+    configuration.imageProperties.cornerRadius = 12
     contentConfiguration = configuration
   }
 }
