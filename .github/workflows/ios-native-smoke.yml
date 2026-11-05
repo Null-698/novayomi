@@ -116,5 +116,20 @@ jobs:
           assert 'configureHomeHeader' in source and 'NovayomiFeaturedNovelCell' in source
           assert 'getPopularProvider' in source_dart and 'getLatestUpdatesProvider' in source_dart
           assert 'heading.text = "Settings"' in more and 'tile(for: item)' in more
+          # Reference screens: Browse actions above the title, full-scroll
+          # Settings, search with real filter chips, and no dangling hit areas.
+          assert 'heading.topAnchor.constraint(equalTo: addButton.bottomAnchor' in browse
+          assert 'table.contentInset.bottom = 108' in browse
+          assert 'table.contentInset.bottom = 114' in more
+          assert 'item.path == "incognito" ? nil : tile(for: item)' in more
+          assert 'filterStack.addArrangedSubview(status)' in source
+          assert 'filterStack.addArrangedSubview(genre)' in source
+          assert 'visibleIndices[index]' in source
+          assert 'pendingSearch?.cancel()' in source
+          assert 'filterHeight.constant = homeMode ? 0 : 50' in source
+          global_dart = Path('lib/modules/browse/global_search/native_ios_global_search.dart').read_text()
+          assert "'status': novel.status?.name" in global_dart
+          assert "'genres': novel.genre" in global_dart
+          assert "'chapter': novel.chapters?.firstOrNull?.name" in source_dart
           print('Native reader, library, Browse, Settings, tab search, and source Home verified.')
           PY
