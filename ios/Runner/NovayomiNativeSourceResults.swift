@@ -578,6 +578,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       config.image = UIImage(systemName: "book.closed")
       config.imageProperties.maximumSize = homeMode
         ? CGSize(width: 66, height: 92) : CGSize(width: 48, height: 70)
+      config.imageProperties.cornerRadius = 9
       if let urlText = item["cover"] as? String,
          let url = URL(string: urlText),
          ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
@@ -608,7 +609,9 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       } else {
         cell.accessibilityIdentifier = nil
       }
-      cell.accessoryType = .disclosureIndicator
+      // Source Home latest-updates rows have no extraneous disclosure
+      // chevron; the whole row remains tappable to open the novel.
+      cell.accessoryType = homeMode ? .none : .disclosureIndicator
     }
     config.imageProperties.tintColor = root.tintColor
     cell.contentConfiguration = config
