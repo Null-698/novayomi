@@ -137,16 +137,17 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
       ]),
       ("", [
         Item("Appearance", "textformat.size", "/appearance"),
-        Item("Library", "books.vertical", "/categories"),
+        Item("Library", "books.vertical", "/general"),
         Item("Reader", "book.pages", "/novelReaderMode"),
         Item("Tracking", "arrow.triangle.2.circlepath", "/track"),
         Item("Downloads", "arrow.down.circle", "/downloads"),
-        Item("iCloud / Sync", "icloud", "/sync"),
+        Item("iCloud Sync", "icloud", "/sync"),
         Item("Advanced", "gearshape.2.fill", "/settings")
       ]),
       ("", [
         Item("About", "info.circle.fill", "/about"),
         Item("Insights", "chart.bar.fill", "/statistics"),
+        Item("Sources", "square.stack.3d.up.fill", "/browseS"),
         Item("Data & Storage", "externaldrive.fill", "/dataAndStorage"),
         Item("Download Queue", "tray.full.fill", "/downloadQueue"),
         Item("Collections", "folder.fill", "/categories"),
@@ -198,7 +199,9 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
     content.secondaryText = item.detail
     content.secondaryTextProperties.color = .secondaryLabel
     content.secondaryTextProperties.numberOfLines = 2
-    content.image = tile(for: item)
+    // The standalone Incognito toggle is a clean text-and-switch card in
+    // the reference, unlike the colored icon tiles below it.
+    content.image = item.path == "incognito" ? nil : tile(for: item)
     content.imageProperties.maximumSize = CGSize(width: 34, height: 34)
     cell.contentConfiguration = content
     if item.toggle {
@@ -226,7 +229,10 @@ private final class NovayomiNativeMoreView: NSObject, FlutterPlatformView,
   private func tile(for item: Item) -> UIImage? {
     let color: UIColor
     switch item.path {
-    case "/appearance", "/sync", "/categories": color = .systemBlue
+    case "/appearance", "/sync": color = .systemBlue
+    case "/general": color = .systemRed
+    case "/browseS": color = .systemGreen
+    case "/categories": color = .systemRed
     case "/novelReaderMode", "/calendarScreen": color = .systemGreen
     case "/track", "/downloads": color = .systemOrange
     case "/settings", "/dataAndStorage": color = .systemGray
