@@ -114,34 +114,40 @@ private final class NovayomiNativeBrowseView: NSObject, FlutterPlatformView,
     table.dataSource = self
     table.delegate = self
     table.backgroundColor = .systemBackground
-    table.rowHeight = 78
+    table.rowHeight = 84
+    // The persistent floating native tab bar overlays the scroll view.
+    // Leave enough real scroll space for the last installed source.
+    table.contentInset.bottom = 108
+    table.verticalScrollIndicatorInsets.bottom = 108
     table.separatorInset = UIEdgeInsets(top: 0, left: 82, bottom: 0, right: 16)
     table.sectionHeaderTopPadding = 10
     table.keyboardDismissMode = .onDrag
     table.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(table)
     grid.translatesAutoresizingMaskIntoConstraints = false
+    grid.reserveBottomSpace(116)
     grid.onSelect = { [weak self] index in self?.selectItem(index) }
     grid.menuFor = { [weak self] index in self?.menuForGridItem(index) }
     root.addSubview(grid)
     NSLayoutConstraint.activate([
-      heading.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 12),
-      heading.leadingAnchor.constraint(equalTo: root.leadingAnchor,
-                                       constant: extensionLanding ? 62 : 20),
-      backButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
-      backButton.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+      // Reference hierarchy: top-right round actions, then a full-width
+      // large title, then the search field and installed-source rows.
+      backButton.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 10),
+      backButton.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
       backButton.widthAnchor.constraint(equalToConstant: 44),
       backButton.heightAnchor.constraint(equalToConstant: 44),
-      heading.trailingAnchor.constraint(lessThanOrEqualTo: layoutButton.leadingAnchor, constant: -8),
-      layoutButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -9),
-      layoutButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
-      layoutButton.widthAnchor.constraint(equalToConstant: 44),
-      layoutButton.heightAnchor.constraint(equalToConstant: 44),
+      addButton.topAnchor.constraint(equalTo: backButton.topAnchor),
       addButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-      addButton.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
-      addButton.widthAnchor.constraint(equalToConstant: 44),
-      addButton.heightAnchor.constraint(equalToConstant: 44),
-      search.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 6),
+      addButton.widthAnchor.constraint(equalToConstant: 48),
+      addButton.heightAnchor.constraint(equalToConstant: 48),
+      layoutButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -14),
+      layoutButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
+      layoutButton.widthAnchor.constraint(equalToConstant: 48),
+      layoutButton.heightAnchor.constraint(equalToConstant: 48),
+      heading.topAnchor.constraint(equalTo: addButton.bottomAnchor, constant: 23),
+      heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
+      heading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+      search.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 10),
       search.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
       search.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
       search.heightAnchor.constraint(equalToConstant: 52),
