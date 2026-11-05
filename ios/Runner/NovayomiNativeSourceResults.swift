@@ -73,6 +73,11 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     channel = FlutterMethodChannel(name: "novayomi/native-source-results/\(id)",
                                    binaryMessenger: messenger)
     super.init()
+    // Use the two-column cover layout for new installations, but preserve an
+    // explicit list preference if the reader has already chosen one.
+    if UserDefaults.standard.object(forKey: "novayomi.results.grid") == nil {
+      showGrid = true
+    }
     root.backgroundColor = .systemBackground
     root.tintColor = .novayomiAccent
     nav.translatesAutoresizingMaskIntoConstraints = false
@@ -284,13 +289,9 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     segmented.selectedSegmentIndex = homeMode ? 0 : 1
     hasMore = data["hasMore"] as? Bool ?? false
     busy = data["loading"] as? Bool ?? false
-    table.reloadData()
+    filterHeight.constant = homeMode ? 0 : 50
+    rebuildResultFilters()
     updateLayout()
-    let posters = novels + (hasMore ? [[
-      "title": busy ? "Loading more…" : "Load more",
-      "description": "Load the next page of results"
-    ]] : [])
-    grid.display(posters)
     let empty = UILabel()
     empty.text = busy ? "Loading novels…" : "No novels found"
     empty.textColor = .secondaryLabel
@@ -299,8 +300,148 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       empty.text = text
       empty.numberOfLines = 3
     }
-    table.backgroundView = novels.isEmpty ? empty : nil
+    table.backgroundView = visibleIndices.isEmpty ? empty : nil
   }
+
+  private func titleForStatus(_ name: String) -> String {
+    switch name {
+    case "ongoing": return "Ongoing"
+    case "completed": return "Completed"
+    case "onHiatus": return "On hiatus"
+    case "canceled": return "Canceled"
+    case "publishingFinished": return "Publishing finished"
+    default: return "Unknown"
+    }
+  }
+
+  private func filterChip(_ text: String, icon: String? = nil) -> UIButton {
+    let button = UIButton(type: .system)
+    var config = UIButton.Configuration.tinted()
+    config.cornerStyle = .capsule
+    config.title = text
+    config.image = icon.flatMap { UIImage(systemName: $0) }
+    config.imagePadding = 6
+    config.contentInsets = NSDirectionalEdgeInsets(
+      top: 8, leading: 13, bottom: 8, trailing: 13)
+    button.configuration = config
+    button.titleLabel?.adjustsFontForContentSizeCategory = true
+    button.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
+    return button
+  }
+
+  /// Sort and filter the records already loaded from the original source
+  /// engine. Filtering never changes the source's paging or search algorithm.
+  private func rebuildResultFilters() {
+    var indices = Array(novels.indices)
+    if !homeMode {
+      if let status = selectedStatus {
+        indices = indices.filter {
+          novels[$0]["status"] as? String == status
+        }
+      }
+      if let genre = selectedGenre {
+        indices = indices.filter {
+          (novels[$0]["genres"] as? [String] ?? [])
+            .contains(where: { $0.caseInsensitiveCompare(genre) == .orderedSame })
+        }
+      }
+      if sortMode != 0 {
+        indices.sort { left, right in
+          let a = novels[left]["title"] as? String ?? ""
+          let b = novels[right]["title"] as? String ?? ""
+          return sortMode == 1
+            ? a.localizedStandardCompare(b) == .orderedAscending
+            : a.localizedStandardCompare(b) == .orderedDescending
+        }
+      }
+    }
+    visibleIndices = indices
+    buildFilterChips()
+    table.reloadData()
+    var cards = indices.map { novels[$0] }
+    if hasMore {
+      cards.append(["title": busy ? "Loading more…" : "Load more",
+                    "description": "Load the next page"])
+    }
+    grid.display(cards)
+  }
+
+  private func buildFilterChips() {
+    for subview in filterStack.arrangedSubviews {
+      filterStack.removeArrangedSubview(subview)
+      subview.removeFromSuperview()
+    }
+    guard !homeMode else { return }
+    let layout = filterChip("", icon: showGrid ? "list.bullet" : "square.grid.2x2")
+    layout.accessibilityLabel = showGrid ? "Show list" : "Show grid"
+    layout.addAction(UIAction { [weak self] _ in self?.toggleLayout() }, for: .touchUpInside)
+    filterStack.addArrangedSubview(layout)
+
+    let sortNames = ["Source order", "Title A–Z", "Title Z–A"]
+    let sort = filterChip(sortMode == 0 ? "Sort" : sortNames[sortMode], icon: "chevron.down")
+    sort.accessibilityLabel = "Sort results"
+    sort.menu = UIMenu(children: sortNames.enumerated().map { index, name in
+      UIAction(title: name, state: index == sortMode ? .on : .off) { [weak self] _ in
+        self?.sortMode = index
+        self?.rebuildResultFilters()
+      }
+    })
+    sort.showsMenuAsPrimaryAction = true
+    filterStack.addArrangedSubview(sort)
+
+    let statuses = Array(Set(novels.compactMap { item -> String? in
+      guard let value = item["status"] as? String, value != "unknown" else { return nil }
+      return value
+    })).sorted()
+    if let value = selectedStatus, !statuses.contains(value) { selectedStatus = nil }
+    let status = filterChip(
+      selectedStatus.map(titleForStatus) ?? "Status", icon: "chevron.down")
+    status.accessibilityLabel = "Filter publication status"
+    var statusActions = [UIAction(title: "All statuses",
+      state: selectedStatus == nil ? .on : .off) { [weak self] _ in
+      self?.selectedStatus = nil
+      self?.rebuildResultFilters()
+    }]
+    statusActions += statuses.map { key in
+      UIAction(title: titleForStatus(key),
+               state: selectedStatus == key ? .on : .off) { [weak self] _ in
+        self?.selectedStatus = key
+        self?.rebuildResultFilters()
+      }
+    }
+    status.menu = UIMenu(children: statusActions)
+    status.showsMenuAsPrimaryAction = true
+    status.isEnabled = !statuses.isEmpty || selectedStatus != nil
+    filterStack.addArrangedSubview(status)
+
+    let type = filterChip("Novel", icon: "book")
+    type.accessibilityLabel = "Content type: Novel"
+    type.isUserInteractionEnabled = false
+    filterStack.addArrangedSubview(type)
+
+    let genres = Array(Set(novels.flatMap { $0["genres"] as? [String] ?? [] }))
+      .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+      .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    if let value = selectedGenre, !genres.contains(value) { selectedGenre = nil }
+    let genre = filterChip(selectedGenre ?? "Genre", icon: "chevron.down")
+    genre.accessibilityLabel = "Filter novel genres"
+    var genreActions = [UIAction(title: "All genres",
+      state: selectedGenre == nil ? .on : .off) { [weak self] _ in
+      self?.selectedGenre = nil
+      self?.rebuildResultFilters()
+    }]
+    genreActions += genres.prefix(80).map { key in
+      UIAction(title: key, state: selectedGenre == key ? .on : .off) { [weak self] _ in
+        self?.selectedGenre = key
+        self?.rebuildResultFilters()
+      }
+    }
+    genre.menu = UIMenu(children: genreActions)
+    genre.showsMenuAsPrimaryAction = true
+    genre.isEnabled = !genres.isEmpty || selectedGenre != nil
+    filterStack.addArrangedSubview(genre)
+  }
+
   @objc private func closeGlobalSearch() { send("close") }
   @objc private func toggleLayout() {
     showGrid.toggle()
@@ -386,7 +527,8 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
 
   func numberOfSections(in tableView: UITableView) -> Int { 1 }
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    (novels.count - (homeMode ? featuredCount : 0)) + (hasMore ? 1 : 0)
+    max(0, visibleIndices.count - (homeMode ? featuredCount : 0)) +
+      (hasMore ? 1 : 0)
   }
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     let cell = tableView.dequeueReusableCell(withIdentifier: "novel")
@@ -394,13 +536,13 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     var config = cell.defaultContentConfiguration()
     // Reused cells may still have an image request in flight.
     cell.accessibilityIdentifier = nil
-    let novelIndex = indexPath.row + (homeMode ? featuredCount : 0)
-    if novelIndex == novels.count {
+    let visibleIndex = indexPath.row + (homeMode ? featuredCount : 0)
+    if visibleIndex == visibleIndices.count {
       config.text = busy ? "Loading more…" : "Load more"
       config.image = UIImage(systemName: "arrow.down.circle")
       cell.accessoryType = .none
     } else {
-      let item = novels[novelIndex]
+      let item = novels[visibleIndices[visibleIndex]]
       config.text = item["title"] as? String ?? "Novel"
       let summary = item["description"] as? String ?? ""
       let source = item["source"] as? String ?? ""
@@ -451,12 +593,12 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
     selectItem(indexPath.row + (homeMode ? featuredCount : 0))
   }
   private func selectItem(_ index: Int) {
-    if index == novels.count {
+    if index == visibleIndices.count {
       guard hasMore && !busy else { return }
       busy = true
       send("loadMore")
-    } else if novels.indices.contains(index) {
-      send("open", index)
+    } else if visibleIndices.indices.contains(index) {
+      send("open", visibleIndices[index])
     }
   }
 }
