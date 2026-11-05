@@ -59,6 +59,7 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   private var busy = false
   private var selected = 0
   private var query = ""
+  private var pendingSearch: DispatchWorkItem?
   private var globalMode = false
   private static let coverCache = NSCache<NSString, UIImage>()
 
@@ -254,7 +255,10 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
       } else { result(FlutterMethodNotImplemented) }
     }
   }
-  deinit { channel.setMethodCallHandler(nil) }
+  deinit {
+    pendingSearch?.cancel()
+    channel.setMethodCallHandler(nil)
+  }
   func view() -> UIView { root }
   private func send(_ name: String, _ value: Any? = nil) {
     channel.invokeMethod(name, arguments: value)
@@ -488,8 +492,19 @@ private final class NovayomiNativeSourceResultsView: NSObject, FlutterPlatformVi
   }
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
     query = searchText
+    guard globalMode else { return }
+    // Aidoku-style search-as-you-type, debounced to avoid hammering multiple
+    // extensions and to cancel obsolete searches while the user is typing.
+    pendingSearch?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.send("search", self.query)
+    }
+    pendingSearch = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
   }
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+    pendingSearch?.cancel()
     searchBar.resignFirstResponder()
     send("search", query)
   }
